@@ -38,7 +38,7 @@ for(i in 2002:2012){
 }
 
 #filter for just flights originating in Boston
-full.data. <- full.data %>%
+full.data.bos <- full.data %>%
   filter(ORIGIN == "BOS")
 
 write.csv(full.data, "FlightsData0212.csv", row.names = FALSE)

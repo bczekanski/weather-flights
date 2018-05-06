@@ -7,9 +7,14 @@
 library(lubridate)
 library(tidyverse)
 
-weather.data <- fread("ATLBOSDETNYCweather0212.csv")
+#MICHAEL
+weather.data <- fread("~/Desktop/Statistics/weather-flights/ATLBOSDETNYCweather0212.csv")
 
-flights <- fread("~/Downloads/FlightsData0212BOS.csv")
+#BEN
+#flights <- fread("~/Downloads/FlightsData0212BOS.csv")
+
+#MICHAEL
+flights <- fread("~/Desktop/Statistics/Stats Final Project/FlightsData0212BOS.csv")
 
 weather <- weather.data %>%
   dplyr::select(-starts_with("W")) %>%
