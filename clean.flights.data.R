@@ -4,58 +4,50 @@
 # There should be comments that make it clear where each of the data that is loaded comes from
 # relative to the get.flights.data script
 
-weather.data <- fread("BOSNYCweather0212.csv")
-
-## THis does the merging but there is no data
-
 library(lubridate)
+library(tidyverse)
+
+weather.data <- fread("ATLBOSDETNYCweather0212.csv")
+
+flights <- fread("~/Downloads/FlightsData0212BOS.csv")
 
 weather <- weather.data %>%
+  dplyr::select(-starts_with("W")) %>%
   mutate(DATE = as_date(DATE)) %>%
   mutate(SNOW = as.numeric(SNOW),
          PRCP = as.numeric(PRCP),
          SNWD = as.numeric(SNWD),
          TMIN = as.numeric(TMIN),
-         TMAX = as.numeric(TMAX))
-
-weather.nyc <- weather %>%
-  filter(NAME == "NY CITY CENTRAL PARK, NY US")
-
-weather.bos <- weather %>%
-  filter(NAME == "BOSTON, MA US")
-
-flights <- mutate(flights, DATE = as_date(paste(YEAR, MONTH, DAY_OF_MONTH, sep = "-")))
-# flights.bos <- flights %>%
-#   filter(ORIGIN_AIRPORT == "BOS")
-
-# cancel.model <- flights %>%
-#   filter(ORIGIN_AIRPORT == "BOS") %>%
-#   glm(factor(CANCELLED) ~ factor(AIRLINE) + WEATHER_DELAY + factor(DESTINATION_AIRPORT),
-#       family = "binomial",
-#       data = .)
-
-
-clean.flights <- weather.bos %>%
-  left_join(weather.nyc, by = "DATE", suffix = c(".bos", ".nyc")) %>% 
-  left_join(flights, ., by = "DATE")
-
-
-
-### This does the lag, but with one city
-
-weather.2015 <- fread("BOSweather2015.csv")
-
-weather <- weather.2015 %>%
-  mutate(DATE = as_date(DATE)) %>%
-  filter(STATION == "USW00014739") %>%
-  dplyr::select("PRCP", "SNOW", "DATE", "TAVG") %>%
-  mutate(SNOW = as.numeric(SNOW),
-         PRCP = as.numeric(PRCP),
-         TAVG = as.numeric(TAVG)) %>%
+         TMAX = as.numeric(TMAX)) %>%
+  group_by(NAME) %>%
   arrange(DATE) %>%
-  mutate_at(c("SNOW", "PRCP", "TAVG"),
+  mutate_at(c("SNOW", "PRCP", "TMIN", "SNWD", "TMAX"),
             funs(lag1 = lag(., 1),
                  lag2 = lag(., 2),
                  lag3 = lag(., 3)))
+
+weather.atl <- weather %>%
+  filter(NAME == "ATLANTA HARTSFIELD INTERNATIONAL AIRPORT, GA US")
+
+  weather.bos <- weather %>%
+  filter(NAME == "BOSTON, MA US")
+
+weather.nyc <- weather %>%
+  filter(NAME == "NY CITY CENTRAL PARK, NY US") 
+
+weather.det <- weather %>%
+  filter(NAME == "DETROIT CITY AIRPORT, MI US")
+
+
+
+# DAY or DAY_OF_MONTH
+flights <- mutate(flights, DATE = as_date(paste(YEAR, MONTH, DAY_OF_MONTH, sep = "-")))
+
+clean.flights <- weather.atl %>%
+  left_join(weather.bos, by = "DATE", suffix = c(".atl", ".bos")) %>%
+  left_join(weather.det, by = "DATE", suffix = c("", ".det")) %>%
+  left_join(weather.nyc, by = "DATE", suffix = c("", ".nyc")) %>% 
+  left_join(flights, ., by = "DATE")
+
 
             
