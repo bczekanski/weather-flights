@@ -6,6 +6,8 @@
 
 weather.data <- fread("BOSNYCweather0212.csv")
 
+## THis does the merging but there is no data
+
 library(lubridate)
 
 weather <- weather.data %>%
@@ -36,3 +38,24 @@ flights <- mutate(flights, DATE = as_date(paste(YEAR, MONTH, DAY_OF_MONTH, sep =
 clean.flights <- weather.bos %>%
   left_join(weather.nyc, by = "DATE", suffix = c(".bos", ".nyc")) %>% 
   left_join(flights, ., by = "DATE")
+
+
+
+### This does the lag, but with one city
+
+weather.2015 <- fread("BOSweather2015.csv")
+
+weather <- weather.2015 %>%
+  mutate(DATE = as_date(DATE)) %>%
+  filter(STATION == "USW00014739") %>%
+  dplyr::select("PRCP", "SNOW", "DATE", "TAVG") %>%
+  mutate(SNOW = as.numeric(SNOW),
+         PRCP = as.numeric(PRCP),
+         TAVG = as.numeric(TAVG)) %>%
+  arrange(DATE) %>%
+  mutate_at(c("SNOW", "PRCP", "TAVG"),
+            funs(lag1 = lag(., 1),
+                 lag2 = lag(., 2),
+                 lag3 = lag(., 3)))
+
+            
