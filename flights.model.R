@@ -1,19 +1,22 @@
 # This script does the model with comments
 # It loads data from the clean.flights.data.R script
 
+library(caret)
+library(tidyverse)
+
+clean_flights <- clean.flights
+
+clean.flights <- sample_frac(clean_flights, 0.1)
+
 training.set <- clean.flights %>%
-  filter(DATE < as_date("2011-12-31"))
+  filter(DATE < as_date("2009-12-31"))
 
 test.set <- clean.flights %>%
-  filter(DATE >= as_date("2011-12-31"))
-#samp <- sample(1:nrow(clean.flights), nrow(clean.flights)*0.6, replace = FALSE)
-# training.set <- clean.flights[samp,]
-# 
-# test.set <- clean.flights[-samp,]
+  filter(DATE >= as_date("2009-12-31"))
 
-our_formula <- "DEP_DELAY ~ UNIQUE_CARRIER + UNIQUE_CARRIER*DEST + WEATHER_DELAY + SNOW.bos + SNOW.nyc + PRCP.bos + PRCP.nyc + TMIN.bos + TMIN.nyc + TMAX.bos + TMAX.nyc + MONTH"
+our.formula <- "CANCELLED ~ SNOW.bos"
 
-training.model <- glm(CANCELLED ~ UNIQUE_CARRIER + SNOW.bos + SNOW.nyc +  PRCP.bos + PRCP.nyc + TMIN.bos + TMIN.nyc + TMAX.bos + TMAX.nyc + factor(MONTH),
+training.model <- glm(our.formula,
                       family = "binomial",
                       data = training.set)
 summary(training.model)
@@ -26,12 +29,11 @@ test.set <-  test.set %>%
 mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 
 
-print(Sys.time())
-alex <- train(factor(CANCELLED) ~ UNIQUE_CARRIER + DEST  + DEST*UNIQUE_CARRIER + SNOW.bos + SNOW.nyc + PRCP.bos +
-                PRCP.nyc + TMIN.bos + TMIN.nyc + TMAX.bos + TMAX.nyc + factor(MONTH),
+
+alex <- train(factor(CANCELLED) ~ SNOW.bos,
               method = "LogitBoost",
               metric = "Kappa",
-              data = sample_frac(training.set, 0.01))
+              data = training.set)
 print(Sys.time())
 
 alex$results
