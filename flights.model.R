@@ -43,7 +43,7 @@ mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 #Use ML to select variables ad get better predictive power
 #SNOW.bos + PRCP.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc,
+alex <- train(factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl,
               method = "LogitBoost",
               metric = "Kappa",
               data = training.set)

@@ -6,6 +6,7 @@
 
 library(lubridate)
 library(tidyverse)
+library(data.table)
 
 #MICHAEL
 weather.data <- fread("~/Desktop/Statistics/weather-flights/ATLBOSDETNYCweather0212.csv")
