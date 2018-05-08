@@ -55,13 +55,17 @@ mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 # WV03 + WV03.nyc + WV03.atl + WV03.det + MONTH + DAY_OF_WEEK + DISTANCE + SNOW + 
 #   TMAX + TMIN + TMAX.atl + TMIN.atl + PRCP + PRCP.nyc + PRCP.det + PRCP.atl
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ MONTH + DAY_OF_WEEK + DISTANCE + SNOW + 
+alex <- train(factor(CANCELLED) ~ MONTH + DAY_OF_WEEK + DISTANCE + SNOW +
                  TMAX + TMIN + TMAX.atl + TMIN.atl + PRCP + PRCP.nyc + PRCP.det + PRCP.atl +
                 WT03 + WT03.nyc + WT03.atl + WT03.det + WV03 + WV03.nyc + WV03.atl + WV03.det +
                 WT01 + WT01.nyc + WT01.atl + WT01.det + WT04 + WT04,
               method = "LogitBoost",
               metric = "Kappa",
               data = training.set)
+# alex <- train(factor(CANCELLED) ~ MONTH + DAY_OF_WEEK + SNOW_lag1,
+#               method = "LogitBoost",
+#               metric = "Kappa",
+#               data = training.set)
 print(Sys.time())
 alex$results
 alex$finalModel
