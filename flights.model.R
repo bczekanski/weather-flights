@@ -4,16 +4,17 @@
 library(caret)
 library(tidyverse)
 
-clean_flights <- clean.flights
+clean_flights <- clean.flights %>%
+  filter(DEST %in% c("JFK", "DTW", "LGA", "ATL"))
 
 #clean.flights <- sample_frac(clean_flights, 0.01)
 
-training.set <- clean.flights %>%
+training.set <- clean_flights %>%
   filter(DATE < as_date("2009-12-31")) %>%
-  sample_frac(0.05)
+  sample_frac(0.1)
 
 
-test.set <- clean.flights %>%
+test.set <- clean_flights %>%
   filter(DATE >= as_date("2009-12-31") & DATE < as_date("2012-01-01"),
          DEST %in% unique(training.set$DEST),
          UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
@@ -55,14 +56,14 @@ mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 # WV03 + WV03.nyc + WV03.atl + WV03.det + MONTH + DAY_OF_WEEK + DISTANCE + SNOW + 
 #   TMAX + TMIN + TMAX.atl + TMIN.atl + PRCP + PRCP.nyc + PRCP.det + PRCP.atl
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ MONTH + DAY_OF_WEEK + DISTANCE +
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
                 TMAX.atl + TMIN.atl + PRCP.nyc + PRCP.det + PRCP.atl +
                 WT03 + WT03.nyc + WT03.atl + WT03.det + WV03 + WV03.nyc + WV03.atl + WV03.det +
                 WT01 + WT01.nyc + WT01.atl + WT01.det + WT04 + WT04 + SNOW + SNOW_lag1 + SNOW_lag2 + SNOW_lag2 + 
                 PRCP + PRCP_lag1  + PRCP_lag2 + PRCP_lag3 + TMIN + TMIN_lag1 + TMIN_lag2 + TMIN_lag3 +
                 TMAX + TMAX_lag1 + TMAX_lag2 + TMAX_lag3 + WESD + WT02 + WT04 + WT05 + WT06 + WT07 + WT08 + WT09 +
-                WT10 + WT11 + WT13 + WT14 + WT15 + WT16 + WT17 + WT18 + WT19 + WT21 + WT22 + DEST_STATE_ABR + DEST_STATE_ABR*PRCP +
-                DEST_STATE_ABR*PRCP.nyc + DEST_STATE_ABR*PRCP.atl + DEST_STATE_ABR*PRCP.det,
+                WT10 + WT11 + WT13 + WT14 + WT15 + WT16 + WT17 + WT18 + WT19 + WT21 + WT22 +
+                NY*PRCP.nyc + GA*PRCP.atl + MI*PRCP.det + NY*WT03.nyc + GA*WT03.atl + MI*WT03.det,
               method = "LogitBoost",
               metric = "Kappa",
               data = training.set)
