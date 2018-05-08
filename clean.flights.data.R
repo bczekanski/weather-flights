@@ -8,8 +8,7 @@ library(lubridate)
 library(tidyverse)
 library(data.table)
 
-#MICHAEL
-weather.data <- fread("~/Desktop/Statistics/weather-flights/ATLBOSDETNYCweather0212.csv")
+weather.data <- fread("ATLBOSDETNYCweather0212.csv")
 
 #BEN
 flights <- fread("~/Downloads/FlightsData0212BOS.csv")
@@ -36,8 +35,10 @@ weather <- weather.data %>%
 weather.atl <- weather %>%
   filter(NAME == "ATLANTA HARTSFIELD INTERNATIONAL AIRPORT, GA US")
 
-  weather.bos <- weather %>%
+weather.bos <- weather %>%
   filter(NAME == "BOSTON, MA US")
+
+# colnames(weather.bos)[colnames(weather.bos) != "DATE"] <- paste0(colnames(weather.bos)[colnames(weather.bos) != "DATE"], ".bos")
 
 weather.nyc <- weather %>%
   filter(NAME == "NY CITY CENTRAL PARK, NY US") 
@@ -50,8 +51,8 @@ weather.det <- weather %>%
 # DAY or DAY_OF_MONTH
 flights <- mutate(flights, DATE = as_date(paste(YEAR, MONTH, DAY_OF_MONTH, sep = "-")))
 
-clean.flights <- weather.atl %>%
-  left_join(weather.bos, by = "DATE", suffix = c(".atl", ".bos")) %>%
+clean.flights <- weather.bos %>%
+  left_join(weather.atl, by = "DATE", suffix = c("", ".atl")) %>%
   left_join(weather.det, by = "DATE", suffix = c("", ".det")) %>%
   left_join(weather.nyc, by = "DATE", suffix = c("", ".nyc")) %>% 
   left_join(flights, ., by = "DATE")
