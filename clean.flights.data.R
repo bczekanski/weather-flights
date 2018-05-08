@@ -12,10 +12,10 @@ library(data.table)
 weather.data <- fread("~/Desktop/Statistics/weather-flights/ATLBOSDETNYCweather0212.csv")
 
 #BEN
-#flights <- fread("~/Downloads/FlightsData0212BOS.csv")
+flights <- fread("~/Downloads/FlightsData0212BOS.csv")
 
 #MICHAEL
-flights <- fread("~/Desktop/Statistics/Stats Final Project/FlightsData0212BOS.csv")
+# flights <- fread("~/Desktop/Statistics/Stats Final Project/FlightsData0212BOS.csv")
 
 weather <- weather.data %>%
   dplyr::select(-starts_with("W")) %>%
@@ -24,7 +24,8 @@ weather <- weather.data %>%
          PRCP = as.numeric(PRCP),
          SNWD = as.numeric(SNWD),
          TMIN = as.numeric(TMIN),
-         TMAX = as.numeric(TMAX)) %>%
+         TMAX = as.numeric(TMAX),
+         TAVG = as.numeric(TAVG)) %>%
   group_by(NAME) %>%
   arrange(DATE) %>%
   mutate_at(c("SNOW", "PRCP", "TMIN", "SNWD", "TMAX"),
