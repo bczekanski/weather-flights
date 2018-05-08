@@ -26,6 +26,7 @@ weather <- weather.data %>%
          TMIN = as.numeric(TMIN),
          TMAX = as.numeric(TMAX),
          TAVG = as.numeric(TAVG)) %>%
+  mutate(PRCP = ifelse(is.na(PRCP), 0, PRCP)) %>%
   group_by(NAME) %>%
   arrange(DATE) %>%
   mutate_at(c("SNOW", "PRCP", "TMIN", "SNWD", "TMAX"),
@@ -35,7 +36,8 @@ weather <- weather.data %>%
 mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   dplyr::select(-starts_with("WD")) %>%
   dplyr::select(-starts_with("WS")) %>%
-  mutate(PRCP = ifelse(is.na(PRCP), 0, PRCP))
+  filter(DATE >= "09-01-2003")
+
   
 
 weather.atl <- weather %>%
