@@ -6,18 +6,27 @@ library(tidyverse)
 
 clean_flights <- clean.flights
 
-clean.flights <- sample_frac(clean_flights, 0.01)
+#clean.flights <- sample_frac(clean_flights, 0.01)
 
 training.set <- clean.flights %>%
-  filter(DATE < as_date("2009-12-31"))
+  filter(DATE < as_date("2009-12-31")) %>%
+  sample_frac(0.01)
 
 
 test.set <- clean.flights %>%
-  filter(DATE >= as_date("2009-12-31"),
+  filter(DATE >= as_date("2009-12-31") & DATE < as_date("2012-01-01"),
          DEST %in% unique(training.set$DEST),
          UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
 
-our.formula <- "factor(CANCELLED) ~ factor(CANCELLATION_CODE)"
+#DO NOT TEST ON
+#TO BE USED TO EVALUATE FINAL MODEL
+secret.test <- clean.flights %>%
+  filter(DATE >= as_date("2012-01-01"),
+         DEST %in% unique(training.set$DEST),
+         UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
+
+our.formula <- "factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + MONTH + DISTANCE + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc"
+print(Sys.time())
 
 #Test Kappa >  Training Kappa because some cancelled flights don't have cancellation codes
 training.model <- glm(our.formula,
@@ -25,38 +34,49 @@ training.model <- glm(our.formula,
                       data = training.set)
 summary(training.model)
 
-training.set$pred <- stats::predict.glm(training.model,
+training.set$pred.glm <- stats::predict.glm(training.model,
                                         training.set,
                                         type = "response")
 
-training.Kappa.val <- (fmsb::Kappa.test(table(training.set$pred > 0.5, training.set$CANCELLED)))$Result$estimate
+glm.training.Kappa.val <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.5, training.set$CANCELLED)))$Result$estimate
 
-test.set$pred <- stats::predict.glm(training.model,
+test.set$pred.glm <- stats::predict.glm(training.model,
                                     test.set,
                                     type = "response")
 
-Kappa.val <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred > 0.5)))$Result$estimate
+glm.test.Kappa.val <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > 0.5)))$Result$estimate
 
 
 mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 
 #Use ML to select variables ad get better predictive power
-#SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc
+#SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc + TAVG.bos + TAVG.atl + TAVG.nyc
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc,
+alex <- train(factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + MONTH + DAY_OF_WEEK + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc,
               method = "LogitBoost",
               metric = "Kappa",
+              tuneLength = 2,
               data = training.set)
 print(Sys.time())
 
-training.set$pred <- predict(alex,
-                             data = training.set)
+training.set$pred.ml <- predict(alex,
+                             training.set)
 
-training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred, training.set$CANCELLED)))$Result$estimate
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
 
-test.set$pred <- predict(alex,
+test.set$pred.ml <- predict(alex,
                          test.set)
 
-test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred)))$Result$estimate
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 
 alex$results
+
+#Confusion Matrix for all 0's
+table(test.set$CANCELLED, rep(0, nrow(test.set)))
+
+#Confusion Matrix for Logistic Model
+table(test.set$CANCELLED, test.set$pred.glm > 0.5)
+
+#Confusion Matrix for LogitBoost
+table(test.set$CANCELLED, test.set$pred.ml)
+
