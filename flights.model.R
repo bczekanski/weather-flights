@@ -50,9 +50,10 @@ glm.test.Kappa.val <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.
 mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 
 #Use ML to select variables ad get better predictive power
+#Don't use SNOW.atl, TMIN.det
 #SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ PRCP_lag1.atl,
+alex <- train(factor(CANCELLED) ~ MONTH + DAY_OF_WEEK + DISTANCE + UNIQUE_CARRIER + SNOW + TMAX + TMIN + TMAX.atl + TMIN.atl,
               method = "LogitBoost",
               metric = "Kappa",
               tuneLength = 2,
