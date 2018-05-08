@@ -17,7 +17,6 @@ flights <- fread("~/Downloads/FlightsData0212BOS.csv")
 # flights <- fread("~/Desktop/Statistics/Stats Final Project/FlightsData0212BOS.csv")
 
 weather <- weather.data %>%
-  dplyr::select(-starts_with("W")) %>%
   mutate(DATE = as_date(DATE)) %>%
   mutate(SNOW = as.numeric(SNOW),
          PRCP = as.numeric(PRCP),
@@ -30,7 +29,10 @@ weather <- weather.data %>%
   mutate_at(c("SNOW", "PRCP", "TMIN", "SNWD", "TMAX"),
             funs(lag1 = lag(., 1),
                  lag2 = lag(., 2),
-                 lag3 = lag(., 3)))
+                 lag3 = lag(., 3))) %>%
+  mutate(WT01 = recode(WT01, "    1" = 1, .default = 0.0))
+
+weather.data$WT01 = recode(weather.data$WT01,"    1" = 1, .default = 0.0)
 
 weather.atl <- weather %>%
   filter(NAME == "ATLANTA HARTSFIELD INTERNATIONAL AIRPORT, GA US")
