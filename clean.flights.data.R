@@ -34,7 +34,9 @@ weather <- weather.data %>%
                  lag3 = lag(., 3))) %>%
 mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   dplyr::select(-starts_with("WD")) %>%
-  dplyr::select(-starts_with("WS"))
+  dplyr::select(-starts_with("WS")) %>%
+  mutate(PRCP = ifelse(is.na(PRCP), 0, PRCP))
+  
 
 weather.atl <- weather %>%
   filter(NAME == "ATLANTA HARTSFIELD INTERNATIONAL AIRPORT, GA US")
