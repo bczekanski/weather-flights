@@ -36,7 +36,7 @@ weather <- weather.data %>%
 mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   dplyr::select(-starts_with("WD")) %>%
   dplyr::select(-starts_with("WS")) %>%
-  filter(DATE >= "09-01-2003")
+  filter(DATE >= lubridate::as_date("2003-09-01"))
 
   
 
@@ -61,7 +61,7 @@ clean.flights <- weather.bos %>%
   left_join(weather.atl, by = "DATE", suffix = c("", ".atl")) %>%
   left_join(weather.det, by = "DATE", suffix = c("", ".det")) %>%
   left_join(weather.nyc, by = "DATE", suffix = c("", ".nyc")) %>% 
-  left_join(flights, ., by = "DATE")
+  left_join(., flights, by = "DATE")
 
 
             
