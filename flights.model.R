@@ -41,9 +41,9 @@ Kappa.val <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred > 0.5)))$
 mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 
 #Use ML to select variables ad get better predictive power
-#SNOW.bos + PRCP.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER
+#SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl,
+alex <- train(factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc,
               method = "LogitBoost",
               metric = "Kappa",
               data = training.set)
