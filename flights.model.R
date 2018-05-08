@@ -50,14 +50,18 @@ glm.test.Kappa.val <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.
 mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 
 #Use ML to select variables ad get better predictive power
+#Don't use SNOW.atl, TMAX.det, TMIN.det, TAVG.det
 #SNOW.bos + TMAX.bos + TMIN.bos + DATE + DISTANCE + UNIQUE_CARRIER + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ PRCP_lag1.atl,
+alex <- train(factor(CANCELLED) ~ WT03 + WT03.nyc + WT03.atl + WT03.det +
+                WV03 + WV03.nyc + WV03.atl + WV03.det + MONTH + DAY_OF_WEEK + DISTANCE + UNIQUE_CARRIER + SNOW + 
+                TMAX + TMIN + TMAX.atl + TMIN.atl,
               method = "LogitBoost",
               metric = "Kappa",
-              tuneLength = 2,
               data = training.set)
 print(Sys.time())
+alex$results
+alex$finalModel
 
 training.set$pred.ml <- predict(alex,
                              training.set)
@@ -68,8 +72,6 @@ test.set$pred.ml <- predict(alex,
                          test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
-
-alex$results
 
 #Confusion Matrix for all 0's
 table(test.set$CANCELLED, rep(0, nrow(test.set)))
