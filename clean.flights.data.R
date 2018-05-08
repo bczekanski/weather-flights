@@ -35,7 +35,7 @@ weather <- weather.data %>%
                  lag3 = lag(., 3))) %>%
 mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   dplyr::select(-starts_with("WD")) %>%
-  dplyr::select(-starts_with("WS")) %>%
+  # dplyr::select(-starts_with("WS")) %>%
   filter(DATE >= lubridate::as_date("2003-09-01"))
 
   
