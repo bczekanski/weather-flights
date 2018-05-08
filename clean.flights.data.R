@@ -16,6 +16,8 @@ flights <- fread("~/Downloads/FlightsData0212BOS.csv")
 #MICHAEL
 # flights <- fread("~/Desktop/Statistics/Stats Final Project/FlightsData0212BOS.csv")
 
+vars_to_recode <- tidyselect::vars_select(colnames(weather.data), starts_with("W"))
+
 weather <- weather.data %>%
   mutate(DATE = as_date(DATE)) %>%
   mutate(SNOW = as.numeric(SNOW),
@@ -30,17 +32,15 @@ weather <- weather.data %>%
             funs(lag1 = lag(., 1),
                  lag2 = lag(., 2),
                  lag3 = lag(., 3))) %>%
-  mutate(WT01 = recode(WT01, "    1" = 1, .default = 0.0))
-
-weather.data$WT01 = recode(weather.data$WT01,"    1" = 1, .default = 0.0)
+mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
+  dplyr::select(-starts_with("WD")) %>%
+  dplyr::select(-starts_with("WS"))
 
 weather.atl <- weather %>%
   filter(NAME == "ATLANTA HARTSFIELD INTERNATIONAL AIRPORT, GA US")
 
 weather.bos <- weather %>%
   filter(NAME == "BOSTON, MA US")
-
-# colnames(weather.bos)[colnames(weather.bos) != "DATE"] <- paste0(colnames(weather.bos)[colnames(weather.bos) != "DATE"], ".bos")
 
 weather.nyc <- weather %>%
   filter(NAME == "NY CITY CENTRAL PARK, NY US") 
