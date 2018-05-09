@@ -5,13 +5,14 @@ library(caret)
 library(tidyverse)
 
 clean_flights <- clean.flights %>%
-  filter(DEST %in% c("JFK", "DTW", "LGA", "ATL"))
-
+  mutate_at(c("DAY_OF_WEEK", "MONTH"), factor) %>%
+  mutate_at(c("AWND", "AWND.atl", "AWND.det", "AWND.nyc"), as.numeric)
 #clean.flights <- sample_frac(clean_flights, 0.01)
 
 training.set <- clean_flights %>%
   filter(DATE < as_date("2009-12-31")) %>%
-  sample_frac(0.1)
+  sample_frac(0.02)
+  #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
 
 
 test.set <- clean_flights %>%
@@ -26,7 +27,7 @@ secret.test <- clean.flights %>%
          DEST %in% unique(training.set$DEST),
          UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
 
-our.formula <- "factor(CANCELLED) ~ SNOW.bos + TMAX.bos + TMIN.bos + MONTH + DISTANCE + SNOW.nyc + TMAX.atl + TMIN.atl + TMAX.nyc + TMIN.nyc"
+our.formula <- "factor(CANCELLED) ~ factor(MONTH) + DISTANCE"
 print(Sys.time())
 
 #Test Kappa >  Training Kappa because some cancelled flights don't have cancellation codes
@@ -36,8 +37,7 @@ training.model <- glm(our.formula,
 summary(training.model)
 
 training.set$pred.glm <- stats::predict.glm(training.model,
-                                        training.set,
-                                        type = "response")
+                                        training.set)
 
 glm.training.Kappa.val <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.5, training.set$CANCELLED)))$Result$estimate
 
@@ -56,14 +56,11 @@ mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 # WV03 + WV03.nyc + WV03.atl + WV03.det + MONTH + DAY_OF_WEEK + DISTANCE + SNOW + 
 #   TMAX + TMIN + TMAX.atl + TMIN.atl + PRCP + PRCP.nyc + PRCP.det + PRCP.atl
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
-                TMAX.atl + TMIN.atl + PRCP.nyc + PRCP.det + PRCP.atl +
-                WT03 + WT03.nyc + WT03.atl + WT03.det + WV03 + WV03.nyc + WV03.atl + WV03.det +
-                WT01 + WT01.nyc + WT01.atl + WT01.det + WT04 + WT04 + SNOW + SNOW_lag1 + SNOW_lag2 + SNOW_lag2 + 
-                PRCP + PRCP_lag1  + PRCP_lag2 + PRCP_lag3 + TMIN + TMIN_lag1 + TMIN_lag2 + TMIN_lag3 +
-                TMAX + TMAX_lag1 + TMAX_lag2 + TMAX_lag3 + WESD + WT02 + WT04 + WT05 + WT06 + WT07 + WT08 + WT09 +
-                WT10 + WT11 + WT13 + WT14 + WT15 + WT16 + WT17 + WT18 + WT19 + WT21 + WT22 +
-                NY*PRCP.nyc + GA*PRCP.atl + MI*PRCP.det + NY*WT03.nyc + GA*WT03.atl + MI*WT03.det,
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
+                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                WT01.det + WT03.det + PRCP.det + AWND.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + TMAX.nyc,
               method = "LogitBoost",
               metric = "Kappa",
               data = training.set)
