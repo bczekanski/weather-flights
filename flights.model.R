@@ -11,7 +11,7 @@ clean_flights <- clean.flights %>%
 
 training.set <- clean_flights %>%
   filter(DATE < as_date("2009-12-31")) %>%
-  sample_frac(0.02)
+  sample_frac(1)
   #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
 
 
@@ -59,8 +59,12 @@ print(Sys.time())
 alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
                 TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
                 TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
-                WT01.det + WT03.det + PRCP.det + AWND.det + WESD.det +
-                TMAX.nyc + TMIN.nyc + TMAX.nyc,
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det + 
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
               method = "LogitBoost",
               metric = "Kappa",
               data = training.set)
