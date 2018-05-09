@@ -36,7 +36,8 @@ weather <- weather.data %>%
 mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   dplyr::select(-starts_with("WD")) %>%
   # dplyr::select(-starts_with("WS")) %>%
-  filter(DATE >= lubridate::as_date("2003-09-01"))
+  filter(DATE >= lubridate::as_date("2003-09-01"),
+         DATE != lubridate::as_date("2006-07-10"))
 
   
 
@@ -65,6 +66,5 @@ clean.flights <- weather.bos %>%
   mutate(NY = factor(DEST_STATE_ABR == "NY"),
          MI = factor(DEST_STATE_ABR == "MI"),
          GA = factor(DEST_STATE_ABR == "GA"))
-
 
             
