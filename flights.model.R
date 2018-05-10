@@ -11,7 +11,7 @@ clean_flights <- clean.flights %>%
 
 training.set <- clean_flights %>%
   filter(DATE < as_date("2009-12-31")) %>%
-  sample_frac(1)
+  sample_frac(0.02)
   #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
 
 
@@ -52,21 +52,40 @@ mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 
 #Use ML to select variables ad get better predictive power
 #Don't use SNOW.atl, TMAX.det, TMIN.det, TAVG.det
-#WT03 + WT03.nyc + WT03.atl + WT03.det +
-# WV03 + WV03.nyc + WV03.atl + WV03.det + MONTH + DAY_OF_WEEK + DISTANCE + SNOW + 
-#   TMAX + TMIN + TMAX.atl + TMIN.atl + PRCP + PRCP.nyc + PRCP.det + PRCP.atl
+# factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
+#   TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+#   TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+#   TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det + 
+#   TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+#   TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+#   TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+#   TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+#   PRCP_lag1.det
+
+
+#BEST: tuneLength = 2, testKappa = 0.24
+# factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + 
+#   TMAX + TMIN + WT01 + WT03 + SNOW + WESD +
+#   TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+#   TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det + 
+#   TMAX.nyc + TMIN.nyc + WT03.nyc + WESD.nyc +
+#   TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+#   TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+#   TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+#   PRCP_lag1.det,
 print(Sys.time())
-alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
-                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
-                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
-                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det + 
-                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
-                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
-                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+alex <- train(factor(CANCELLED) ~ factor(DAY_OF_WEEK) + 
+                TMAX + SNOW + WESD +
+                TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + WESD.det + 
+                TMIN.nyc + WT03.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 +
+                PRCP_lag1.atl +
                 TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
                 PRCP_lag1.det,
               method = "LogitBoost",
               metric = "Kappa",
+              tuneLength = 3,
               data = training.set)
 
 print(Sys.time())
@@ -91,4 +110,5 @@ table(test.set$CANCELLED, test.set$pred.glm > 0.5)
 
 #Confusion Matrix for LogitBoost
 table(test.set$CANCELLED, test.set$pred.ml)
+test.Kappa.val.ml
 
