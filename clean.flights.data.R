@@ -37,7 +37,9 @@ mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   dplyr::select(-starts_with("WD")) %>%
   # dplyr::select(-starts_with("WS")) %>%
   filter(DATE >= lubridate::as_date("2003-09-01"),
-         DATE != lubridate::as_date("2006-07-10"))
+         DATE != lubridate::as_date("2006-07-10")) %>%
+  mutate(PRCP.TMIN.l32 = PRCP*(TMIN < 32)) %>%
+  mutate(PRCP.TMAX.l32 = PRCP*(TMAX < 32))
 
   
 

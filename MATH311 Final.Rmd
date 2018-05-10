@@ -38,8 +38,9 @@ We can begin predicting flight cancellations using the amount of precipitation i
 
 ```{r}
 test.set$pred.glm <- stats::predict.glm(training.model,
-                                            training.set)
-table(test.set$pred.glm > 0.5, test.set$CANCELLED)
+                                        test.set,
+                                        type = "response")
+fmsb::Kappa.test(table(test.set$pred.glm > 0.1, test.set$CANCELLED))
 ```
 
 This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. We can also try this with more variables and regardless of statistical significance the predictions don't change.
@@ -56,24 +57,213 @@ Again we can show that this model predicts no cancelled flights correctly.
 
 ```{r}
 test.set$pred.glm <- stats::predict.glm(training.model,
-                                            test.set)
+                                        test.set,
+                                        type = "response")
 table(test.set$pred.glm > 0.5, test.set$CANCELLED)
+fmsb::Kappa.test(table(test.set$pred.glm > 0.16, test.set$CANCELLED))$Result$estimate
 ```
 
 
+The accuracy of both of these models is 97% which is would be impressive if we could not also achieve this level of accuracy by guessing that no flights will be cancelled at all. A better metric we can use to evaluate models is Cohen's Kappa which measures the amount of information added by the model by quantifying how much of the gap between random guessing and perfect prediction we have made up with our model. With such a strong trend in our data (97% of flights being cancelled) this metric will punish the model strongly for incorrectly predicting against the trend and heavily reward it for correctly predicting against the trend which emphasizes the model's ability to accurately predict against the trend. We can improve this prediction by using the Boosted algorithm LogitBoost (caret package) in which we bootstrap our model through resampled data. In each iteration the data is sampled, with harder to predict observations being weighted heavier, a logistic model is fit to the data and in the end the models are averaged weighted by their performance on the training data. This model also uses decision stumps as opposed to a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
+
+```{r}
+print(Sys.time())
+alex <- train(factor(CANCELLED) ~ PRCP,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = training.set)
+
+print(Sys.time())
+alex$results
+alex$finalModel
+```
+
+Here, with only one feature the model uses this one feature in each iteration with threshold 4.29 with a sign of -1. Therefore if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
+
+Now to calculate Cohen's Kappa we can sue the function Kappa.test our of the "fmsb" package on a confusion matrix of our predictions vs. the truth about each cancellation.
+
+Confusion Matrix:
+```{r}
+test.set$pred.ml <- predict(alex,
+                         test.set)
+table(test.set$CANCELLED, test.set$pred.ml)
+```
+
+```{r}
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+test.Kappa.val.ml
+```
+Here test Kappa is again zero for this basic model but we believe it will improve greatly with more predictor variables and use of this algorithm.
+
+A more complex model:
+
+```{r}
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
+                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = training.set)
+
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+One large issue that we ran into is demonstrated here, the model repeatedly picks up on distance as an important variable and repeatedly makes thresholds around 860 but the sign associated with each is routinely changing. We can interpret this as distance being a good predictor in each iteration but is not very good as a predictor overall as the signs for identical thresholds are inconsistent. This tells us that we should remove distance from the model because while training the algorithm is spending a lot of iterations focusing on distance with little to show for it.
+
+```{r}
+#REMOVED DISTANCE
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
+                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = training.set)
+
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+TMIN again switches signs with a threshold of roughly 70.
+
+```{r}
+#REMOVED TMIN and ADDED TMIN.l32 and TMAX.l32
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
+                TMAX + WT01 + WT03 + SNOW + PRCP + AWND + WESD + PRCP*PRCP.TMIN.l32 + PRCP*PRCP.TMAX.l32 + 
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = training.set)
+
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+```{r}
+#REMOVED PRCP
+#PRCP.TMIN.l32
+#TMAX.nyc
+#TMAX
+#WT03
+#MONTH
+#PRCP.nyc
+#TMIN_lag1.atl
+#WT01 & WT01.nyc & PRCP
+alex <- train(factor(CANCELLED) ~ factor(DAY_OF_WEEK) +
+                SNOW + AWND + WESD + PRCP.TMAX.l32 + 
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMIN.nyc + WT03.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = training.set)
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
 
 
+```{r}
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
+                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "ranger",
+              metric = "Kappa",
+              data = sample_frac(training.set, 0.3))
 
+alex$results
+alex$finalModel
 
+training.set$pred.ml <- predict(alex,
+                                training.set)
 
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
 
+test.set$pred.ml <- predict(alex,
+                            test.set)
 
-
-
-
-
-
-
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
 
 
 

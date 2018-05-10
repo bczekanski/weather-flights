@@ -9,6 +9,7 @@ clean_flights <- clean.flights %>%
   mutate_at(c("AWND", "AWND.atl", "AWND.det", "AWND.nyc"), as.numeric)
 #clean.flights <- sample_frac(clean_flights, 0.01)
 
+set.seed(1)
 training.set <- clean_flights %>%
   filter(DATE < as_date("2009-12-31")) %>%
   sample_frac(0.02)
@@ -52,10 +53,10 @@ mse.training.model <- mean((test.set$pred - test.set$CANCELLED)^2)
 
 #Use ML to select variables ad get better predictive power
 #Don't use SNOW.atl, TMAX.det, TMIN.det, TAVG.det
-# factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
+# factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
 #   TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
 #   TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
-#   TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det + 
+#   TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
 #   TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
 #   TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
 #   TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
