@@ -1,0 +1,119 @@
+---
+title: "MATH 311 Final Project"
+author: "Ben Czekanski & Michael Czekanski"
+date: "5/18/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(data.table)
+```
+
+##Introduction
+We are attempting to predict flight cancellations for flights leaving Boston using weather data from Boston, Atlanta, Detroit, and New York City. Our flight data contains 1.3 million flights leaving Boston from 2004-2012.
+
+
+##Methods
+While we are using all data from 2004 through 2009 as our training set, this data has over 700,000 entries and this it is computationally expensive to train on such a large data set. We believe that we should be able to effiectively train and get a good understanding of how our model is performing as long as we use at least 10,000 randomly selected entries from this training set. The training set we use to tune or model is actually only 2% of our total training data which equates to roughly 15,000 entries.
+```{r}
+set.seed(1)
+training.set <- clean_flights %>%
+  filter(DATE < as_date("2009-12-31")) %>%
+  sample_frac(0.02)
+```
+
+#Basic Logistic Model
+
+```{r}
+training.model <- glm(factor(CANCELLED) ~ PRCP,
+                      family = "binomial",
+                      data = training.set)
+summary(training.model)
+```
+
+We can begin predicting flight cancellations using the amount of precipitation in Boston on the day the flight occured. Although we see that precipitation has a statistically signifcant relationship with the log odds of a flight being cancelled, when we look at the predictions of flight cancellations its clear that precipitation performs no better than just guessing that no flights will be cancelled because so few flights are cancelled.
+
+```{r}
+test.set$pred.glm <- stats::predict.glm(training.model,
+                                            training.set)
+table(test.set$pred.glm > 0.5, test.set$CANCELLED)
+```
+
+This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. We can also try this with more variables and regardless of statistical significance the predictions don't change.
+
+```{r}
+training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
+                        TMAX + TMIN + WT01 + WT03 + PRCP + SNOW + WESD,
+                      family = "binomial",
+                      data = training.set)
+summary(training.model)
+```
+
+Again we can show that this model predicts no cancelled flights correctly.
+
+```{r}
+test.set$pred.glm <- stats::predict.glm(training.model,
+                                            test.set)
+table(test.set$pred.glm > 0.5, test.set$CANCELLED)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+flights.bos <- fread("FlightsData0212BOS.csv")
+weather.data <- fread("BOSNYCweather0212.csv")
+
+
+weather <- weather.data %>%
+  mutate(DATE = as_date(DATE)) %>%
+  mutate(SNOW = as.numeric(SNOW),
+         PRCP = as.numeric(PRCP),
+         SNWD = as.numeric(SNWD),
+         TMIN = as.numeric(TMIN),
+         TMAX = as.numeric(TMAX),
+         TAVG = as.numeric(TAVG))
+
+weather.nyc <- weather %>%
+  filter(NAME == "NY CITY CENTRAL PARK, NY US")
+
+weather.bos <- weather %>%
+  filter(NAME == "BOSTON, MA US")
+```
+
+##Feature Selection. 
+We speculate that the weather in Boston is different from the weather in NYC and that this difference will help us to predict cancellations of flights in Boston. We must test to see if the weather is different in these two cities.
+```{r}
+hist(weather.bos$TAVG - weather.nyc$TAVG)
+```
+
+This is roughly normally distributed so we can perform a t-test.
+
+```{r}
+t.test(weather.bos$TAVG - weather.nyc$TAVG)
+```
+
+THE AVERAGE TEMPERATURE IS NOT THE SAME.
