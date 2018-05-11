@@ -236,6 +236,7 @@ test.Kappa.val.ml
 
 
 ```{r}
+Sys.time()
 alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
                 TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
                 TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
@@ -247,8 +248,8 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE
                 PRCP_lag1.det,
               method = "ranger",
               metric = "Kappa",
-              data = sample_frac(training.set, 0.3))
-
+              data = sample_frac(training.set, 1))
+Sys.time()
 alex$results
 alex$finalModel
 

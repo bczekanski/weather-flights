@@ -11,7 +11,9 @@ clean_flights <- clean.flights %>%
 
 set.seed(1)
 training.set <- clean_flights %>%
-  filter(DATE < as_date("2009-12-31")) %>%
+  filter(DATE < as_date("2009-12-31")) 
+
+small.training.set <-  training.set%>%
   sample_frac(0.02)
   #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
 
@@ -102,6 +104,39 @@ test.set$pred.ml <- predict(alex,
                          test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+#Random Forest
+Sys.time()
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
+                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "rf",
+              metric = "Kappa",
+              data = sample_frac(small.training.set, 0.6))
+Sys.time()
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex, training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+small.training.set$pred.ml <- predict(alex, training.set)
+
+smmall.training.Kappa.val.ml <- (fmsb::Kappa.test(table(small.training.set$pred.ml, small.training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+training.Kappa.val.ml
+test.Kappa.val.ml
 
 #Confusion Matrix for all 0's
 table(test.set$CANCELLED, rep(0, nrow(test.set)))
