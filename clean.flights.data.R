@@ -39,7 +39,8 @@ mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   filter(DATE >= lubridate::as_date("2003-09-01"),
          DATE != lubridate::as_date("2006-07-10")) %>%
   mutate(PRCP.TMIN.l32 = PRCP*(TMIN < 32)) %>%
-  mutate(PRCP.TMAX.l32 = PRCP*(TMAX < 32))
+  mutate(PRCP.TMAX.l32 = PRCP*(TMAX < 32)) %>%
+  mutate(CANCELLED == ifelse(CANCELLED == 1, "Cancelled", "NOT CANCELLED"))
 
   
 

@@ -2,7 +2,9 @@
 title: "MATH 311 Final Project"
 author: "Ben Czekanski & Michael Czekanski"
 date: "5/18/2018"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -10,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
 library(data.table)
+library(doMC)
 ```
 
 ##Introduction
@@ -22,7 +25,7 @@ While we are using all data from 2004 through 2009 as our training set, this dat
 set.seed(1)
 training.set <- clean_flights %>%
   filter(DATE < as_date("2009-12-31")) %>%
-  sample_frac(0.02)
+  sample_frac(0.01)
 ```
 
 #Basic Logistic Model
@@ -234,6 +237,7 @@ training.Kappa.val.ml
 test.Kappa.val.ml
 ```
 
+Often times the LogitBoost algorithm cycles through these variables and we would end up removing variables such as precipitation or snow in Boston which should definitely be useful in predicting flight cancellations. To make sense of these cycles we would have to look at interactions between multiple variables. For example we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration a random forest makes multiple thresholds and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
 
 ```{r}
 Sys.time()
@@ -246,7 +250,7 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE
                 TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
                 TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
                 PRCP_lag1.det,
-              method = "ranger",
+              method = "rf",
               metric = "Kappa",
               data = sample_frac(training.set, 1))
 Sys.time()
@@ -266,9 +270,81 @@ training.Kappa.val.ml
 test.Kappa.val.ml
 ```
 
+These random forests are an improvement over LogitBoost but are much more computationally expensive and do not yield much better results and also has a tendency to overfit.
 
+#Revisiting Previous Models
 
+One way that we can attempt to get a better idea of whether or not a flight will be cancelled from these models is re-evaluating our cutoff for predicted probabilities. In our original logistic models we used a cutoff of 0.5, meaning that if P(cancellation) > 0.5 we classify the flight as cancelled and if P(cancellation < 0.5) we classify the flight as not cancelled. If our model has spikes in predicted probability for flights that are cancelled we can capture this through a new cutoff. This is computationally inexpensive and intuitive that our model would have a hard time predicting P(cancellation) > 0.5 because so few flights are actually cancelled. We investigate a better cutoff in the code below:
 
+```{r}
+
+fit.glm.once <- function(){
+  training.model <- glm( factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + 
+                           TMAX + TMIN + WT01 + WT03 + SNOW + WESD +
+                           TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                           TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det + 
+                           TMAX.nyc + TMIN.nyc + WT03.nyc + WESD.nyc +
+                           TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                           TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                           TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                           PRCP_lag1.det,
+                         family = "binomial",
+                         data = clean_flights)
+  summary(training.model)
+  
+  training.set$pred.glm <- stats::predict.glm(training.model,
+                                              training.set,
+                                              type = "response")
+  train.quant.97 <- quantile(training.set$pred.glm, 0.97)
+  
+  test.set$pred.glm <- stats::predict.glm(training.model,
+                                          test.set,
+                                          type = "response")
+  test.quant.97 <- quantile(test.set$pred.glm, 0.97)
+  
+  results <- data.frame()
+  for(i in seq(from = 0.05, to = 0.95, by = 0.01)){
+    if (sum(training.set$pred.glm > i) == 0){
+      train.results <- data.frame(Cutoff = i, Fraction = frac, Kappa = 0, Set = "Train", Quanitle.97 = train.quant.97)
+    } else{
+      glm.training.Kappa.val <- (fmsb::Kappa.test(table(training.set$pred.glm > i, training.set$CANCELLED)))$Result$estimate
+      train.results <- data.frame(Cutoff = i, Fraction = frac, Kappa = glm.training.Kappa.val, Set = "Train", Quanitle.97 = train.quant.97)
+    }
+    
+    if(sum(test.set$pred.glm > i) == 0){
+      test.results <- data.frame(Cutoff = i, Fraction = frac, Kappa = 0, Set = "Train", Quanitle.97 = test.quant.97)
+    } else{
+      glm.test.Kappa.val <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > i)))$Result$estimate
+      test.results <- data.frame(Cutoff = i, Fraction = frac, Kappa = glm.training.Kappa.val, Set = "Test",  Quanitle.97 = test.quant.97)
+    }
+    
+    results <- rbind(train.results, test.results, results)
+  }
+  return(results)
+}
+
+glm.cutoffs <- fit.glm.once()
+
+glm.cutoffs %>%
+  ggplot(aes(x = Cutoff, y = Kappa)) +
+  geom_point() +
+  labs(title = "Kappa vs. Cutoff") + 
+  theme_bw() +
+  scale_color_colorblind()
+```
+
+As shown in this graph the cutoff we use can have a large impact on the Kappa we achieve. To the optimal cutoff we began by checking to see if the cutoff is the 0.97 quantile of the predicted probabilities which we intuit from the fact that 97% of flights are cancelled so we hope that these are the 97% of the lowest predicted probabilities of cancellation. To highlight this on the graph we can highlight whether the given cutoff is above or below the 0.97 quantile of the predicted probabilities.
+
+```{r}
+glm.cutoffs %>%
+  mutate(above.quant = Cutoff > Quanitle.97) %>%
+  ggplot(aes(x = Cutoff, y = Kappa)) +
+  geom_point(aes(color = above.quant)) +
+  scale_color_colorblind() + 
+  facet_grid(~Set)
+```
+
+Here the Kappa values for both the test and training sets are shown with various cutoffs. We can see that the 0.97 quantile of the predicted proabbilities seems to be the best cutoff in that it achieves the highest Kappa. 
 
 
 

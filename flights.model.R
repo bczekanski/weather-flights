@@ -14,7 +14,7 @@ training.set <- clean_flights %>%
   filter(DATE < as_date("2009-12-31")) 
 
 small.training.set <-  training.set%>%
-  sample_frac(0.02)
+  sample_frac(0.01)
   #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
 
 
@@ -118,7 +118,7 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE
                 PRCP_lag1.det,
               method = "rf",
               metric = "Kappa",
-              data = sample_frac(small.training.set, 0.6))
+              data = sample_frac(small.training.set, 0.1))
 Sys.time()
 alex$results
 alex$finalModel
@@ -127,14 +127,16 @@ training.set$pred.ml <- predict(alex, training.set)
 
 training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
 
-small.training.set$pred.ml <- predict(alex, training.set)
+small.training.set$pred.ml <- predict(alex, small.training.set)
 
-smmall.training.Kappa.val.ml <- (fmsb::Kappa.test(table(small.training.set$pred.ml, small.training.set$CANCELLED)))$Result$estimate
+small.training.Kappa.val.ml <- (fmsb::Kappa.test(table(small.training.set$pred.ml, small.training.set$CANCELLED)))$Result$estimate
 
 test.set$pred.ml <- predict(alex,
                             test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+small.training.Kappa.val.ml
 training.Kappa.val.ml
 test.Kappa.val.ml
 
@@ -145,6 +147,7 @@ table(test.set$CANCELLED, rep(0, nrow(test.set)))
 table(test.set$CANCELLED, test.set$pred.glm > 0.5)
 
 #Confusion Matrix for LogitBoost
-table(test.set$CANCELLED, test.set$pred.ml)
+table(test.set$CANCELLED, (test.set$pred.ml == 1))
 test.Kappa.val.ml
 
+#Revaluating cut-off
