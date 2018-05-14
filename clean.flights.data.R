@@ -11,7 +11,8 @@ library(data.table)
 weather.data <- fread("ATLBOSDETNYCweather0212.csv")
 
 #BEN
-flights <- fread("~/Downloads/FlightsData0212BOS.csv")
+flights <- fread("~/Downloads/FlightsData0212BOS.csv") %>%
+  mutate(CANCELLED = ifelse(CANCELLED == 1, "CANCELED", "NOT CANCELLED"))
 
 #MICHAEL
 # flights <- fread("~/Desktop/Statistics/Stats Final Project/FlightsData0212BOS.csv")
@@ -39,8 +40,8 @@ mutate_at(vars_to_recode, funs(recode(., "    1" = 1, .default = 0.0))) %>%
   filter(DATE >= lubridate::as_date("2003-09-01"),
          DATE != lubridate::as_date("2006-07-10")) %>%
   mutate(PRCP.TMIN.l32 = PRCP*(TMIN < 32)) %>%
-  mutate(PRCP.TMAX.l32 = PRCP*(TMAX < 32)) %>%
-  mutate(CANCELLED == ifelse(CANCELLED == 1, "Cancelled", "NOT CANCELLED"))
+  mutate(PRCP.TMAX.l32 = PRCP*(TMAX < 32)) 
+
 
   
 
