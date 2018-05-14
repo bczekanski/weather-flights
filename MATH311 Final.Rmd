@@ -13,6 +13,7 @@ library(tidyverse)
 library(lubridate)
 library(data.table)
 library(doMC)
+clean_flights <- fread("~/Desktop/FlightData.csv")
 ```
 
 ##Introduction

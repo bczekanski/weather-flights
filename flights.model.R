@@ -4,9 +4,7 @@
 library(caret)
 library(tidyverse)
 
-clean_flights <- clean.flights %>%
-  mutate_at(c("DAY_OF_WEEK", "MONTH"), factor) %>%
-  mutate_at(c("AWND", "AWND.atl", "AWND.det", "AWND.nyc"), as.numeric)
+clean_flights <- clean.flights
 #clean.flights <- sample_frac(clean_flights, 0.01)
 
 set.seed(1)

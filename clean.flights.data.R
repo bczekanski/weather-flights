@@ -68,6 +68,8 @@ clean.flights <- weather.bos %>%
   left_join(., flights, by = "DATE") %>%
   mutate(NY = factor(DEST_STATE_ABR == "NY"),
          MI = factor(DEST_STATE_ABR == "MI"),
-         GA = factor(DEST_STATE_ABR == "GA"))
+         GA = factor(DEST_STATE_ABR == "GA"))  %>%
+  mutate_at(c("DAY_OF_WEEK", "MONTH"), factor) %>%
+  mutate_at(c("AWND", "AWND.atl", "AWND.det", "AWND.nyc"), as.numeric)
 
             
