@@ -11,8 +11,7 @@ library(data.table)
 weather.data <- fread("ATLBOSDETNYCweather0212.csv")
 
 #BEN
-flights <- fread("~/Downloads/FlightsData0212BOS.csv") %>%
-  mutate(CANCELLED = ifelse(CANCELLED == 1, "CANCELED", "NOT CANCELLED"))
+flights <- fread("~/Downloads/FlightsData0212BOS.csv")
 
 #MICHAEL
 # flights <- fread("~/Desktop/Statistics/Stats Final Project/FlightsData0212BOS.csv")
