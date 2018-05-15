@@ -309,16 +309,16 @@ At this point this algorithm continues to cycle thorough variables and we will e
 #               method = "rf",
 #               metric = "Kappa",
 #               data = sample_frac(small.training.set, 1))
-load(rf.model)
-rf.model$results
-rf.model$finalModel
+load("rf.model")
+alex$results
+alex$finalModel
 
-training.set$pred.ml <- predict(rf.model,
+training.set$pred.ml <- predict(alex,
                                 training.set)
 
 training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
 
-test.set$pred.ml <- predict(rf.model,
+test.set$pred.ml <- predict(alex,
                             test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
@@ -422,7 +422,7 @@ As shown in this graph the cutoff we use can have a large impact on the Kappa we
 
 ```{r}
 glm.cutoffs %>%
-  mutate(above.quant = Cutoff > Quanitle.97) %>%
+  mutate(above.quant = Cutoff > Quantile.97) %>%
   ggplot(aes(x = Cutoff, y = Kappa)) +
   geom_point(aes(color = above.quant)) +
   scale_color_colorblind() +
@@ -435,7 +435,9 @@ Here the Kappa values for both the test and training sets are shown with various
 
 rf.cutoffs <- fread("CutoffsRF.csv")
 cutoffs.sim <- rf.cutoffs
-
+num.iter <- cutoffs.sim$Iteration %>%
+  unique() %>%
+  length()
 diffs <- NULL
 for(i in 1:num.iter){
   print(i)
@@ -497,38 +499,3 @@ cutoffs.sim %>%
 
 
 
-
-```{r}
-flights.bos <- fread("FlightsData0212BOS.csv")
-weather.data <- fread("BOSNYCweather0212.csv")
-
-
-weather <- weather.data %>%
-  mutate(DATE = as_date(DATE)) %>%
-  mutate(SNOW = as.numeric(SNOW),
-         PRCP = as.numeric(PRCP),
-         SNWD = as.numeric(SNWD),
-         TMIN = as.numeric(TMIN),
-         TMAX = as.numeric(TMAX),
-         TAVG = as.numeric(TAVG))
-
-weather.nyc <- weather %>%
-  filter(NAME == "NY CITY CENTRAL PARK, NY US")
-
-weather.bos <- weather %>%
-  filter(NAME == "BOSTON, MA US")
-```
-
-##Feature Selection.
-We speculate that the weather in Boston is different from the weather in NYC and that this difference will help us to predict cancellations of flights in Boston. We must test to see if the weather is different in these two cities.
-```{r}
-hist(weather.bos$TAVG - weather.nyc$TAVG)
-```
-
-This is roughly normally distributed so we can perform a t-test.
-
-```{r}
-t.test(weather.bos$TAVG - weather.nyc$TAVG)
-```
-
-THE AVERAGE TEMPERATURE IS NOT THE SAME.
