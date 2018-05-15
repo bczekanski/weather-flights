@@ -1,0 +1,534 @@
+---
+title: "MATH 311 Final Project"
+author: "Ben Czekanski & Michael Czekanski"
+date: "5/18/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(data.table)
+library(doMC)
+library(caret)
+library(ggthemes)
+clean_flights <- fread("~/Desktop/FlightData.csv")
+
+set.seed(1)
+training.set <- clean_flights %>%
+  filter(DATE < as_date("2009-12-31")) 
+
+small.training.set <-  training.set%>%
+  sample_frac(0.01)
+  #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
+
+
+test.set <- clean_flights %>%
+  filter(DATE >= as_date("2009-12-31") & DATE < as_date("2012-01-01"),
+         DEST %in% unique(training.set$DEST),
+         UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
+
+#DO NOT TEST ON
+#TO BE USED TO EVALUATE FINAL MODEL
+secret.test <- clean_flights %>%
+  filter(DATE >= as_date("2012-01-01"),
+         DEST %in% unique(training.set$DEST),
+         UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
+
+```
+
+##Introduction
+We are attempting to predict flight cancellations for flights leaving Boston using weather data from Boston, Atlanta, Detroit, and New York City. Our flight data contains 1.3 million flights leaving Boston from 2004-2012.
+
+
+##Methods
+While we are using all data from 2004 through 2009 as our training set, this data has over 700,000 entries and this it is computationally expensive to train on such a large data set. We believe that we should be able to effiectively train and get a good understanding of how our model is performing as long as we use at least 10,000 randomly selected entries from this training set. The training set we use to tune or model is actually only 2% of our total training data which equates to roughly 15,000 entries.
+```{r}
+set.seed(1)
+training.set <- clean_flights %>%
+  filter(DATE < as_date("2009-12-31")) %>%
+  sample_frac(0.01)
+```
+
+#Basic Logistic Model
+
+We began creating our model using basic logistic regression to classify a given flight as either cancelled(1) or not cancelled(0).
+
+```{r}
+training.model <- glm(factor(CANCELLED) ~ PRCP,
+                      family = "binomial",
+                      data = training.set)
+summary(training.model)
+```
+
+We started by using the amount of precipitation in Boston on the day the flight occured asour predictor variable. Although we see that precipitation has a statistically signifcant relationship with the log odds of a flight being cancelled, when we look at the predictions of flight cancellations its clear that precipitation performs no better than just guessing that no flights will be cancelled because so few flights are cancelled.
+
+```{r}
+test.set$pred.glm <- stats::predict.glm(training.model,
+                                        test.set,
+                                        type = "response")
+fmsb::Kappa.test(table(test.set$pred.glm > 0.1, test.set$CANCELLED))
+```
+
+This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. However this model does not add to our understanding of flight cancellations. We can also try this with more variables and regardless of statistical significance the predictions don't change.
+
+```{r}
+training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
+                        TMAX + TMIN + PRCP + SNOW + WESD + 
+                        TMAX.atl + TMIN.atl + PRCP.atl + WESD.atl +
+                        TMAX.nyc + TMIN.nyc + PRCP.nyc + WESD.nyc + 
+                        TMAX.det + TMIN.det + PRCP.det + WESD.det, 
+                      family = "binomial",
+                      data = training.set)
+summary(training.model)
+```
+
+Again we can show that this model predicts no cancelled flights correctly.
+
+```{r}
+test.set$pred.glm <- stats::predict.glm(training.model,
+                                        test.set,
+                                        type = "response")
+table(test.set$pred.glm > 0.5, test.set$CANCELLED)
+fmsb::Kappa.test(table(test.set$pred.glm > 0.5, test.set$CANCELLED))$Result$estimate
+```
+
+##THIS IS PREDICTING CORRECTLY UNLIKE THE PRESENTATION NOW
+The accuracy of both of these models is 97% which is would be impressive if we could not also achieve this level of accuracy by guessing that no flights will be cancelled at all. A better metric we can use to evaluate models is Cohen's Kappa which measures the amount of information added by the model by quantifying how much of the gap between random guessing and perfect prediction we have made up with our model. Cohen's Kappa can be calculated using the equation below.
+
+$$
+K = \frac{P_O - P_E}{1 - P_E}\\
+P_O = P(agreement observed)
+P_E = P(agreement expected due to chance)
+$$
+PE is the probability that the model and the truth agree by random chance. It is calculated as 
+
+$$
+P_O = P(model and truth agree) \\
+= P(both agree flight cancelled) + P(both agree flight not cancelled) \\
+= P(model = 1)P(truth = 1) + P(model = 0)P(truth = 0)
+$$
+
+We can understand this as the porbability that the model and the true values if their classifications had both been randomly assigned to observations. We would expect them to agree with probability P_E but these classifications can be distributed in many different permutations and some are better than others. We need to compare our results to this baseline of randomly permuted classifications so we look at the probability that our model and the truth agreed based on the observed matches. We use PO which is the probability that the model and the truth agree as observed from our predictions. It is calculated as 
+$$
+P_E = P(prediction is correct) \\
+= mean(predicted value == truevalue)\\
+$$
+
+From this calculation Cohen's Kappa tells us how much better we are doing than randomly permuting our classifications and thus we want this number to be higher and it is bounded above by 1 which would mean we are predicting perfectly. Although it is not bounded below by 0, values below zero mean that we are performing worse than random guessing which is very bad.
+
+With such a strong trend in our data (97% of flights being cancelled) this metric will punish the model strongly for incorrectly predicting against the trend and heavily reward it for correctly predicting against the trend which emphasizes the model's ability to accurately predict against the trend. We can improve this prediction by using the Boosted algorithm LogitBoost (caret package) in which we bootstrap our model through resampled data. In each iteration the data is sampled, with harder to predict observations being weighted heavier, a logistic model is fit to the data and in the end the models are averaged weighted by their performance on the training data. This model also uses decision stumps as opposed to a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
+
+```{r}
+print(Sys.time())
+alex <- train(factor(CANCELLED) ~ PRCP,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = small.training.set)
+
+print(Sys.time())
+alex$results
+alex$finalModel
+```
+
+Here, with only one feature the model uses this one feature in each iteration with threshold 4.29 with a sign of -1. Therefore if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
+
+Now to calculate Cohen's Kappa we can sue the function Kappa.test our of the "fmsb" package on a confusion matrix of our predictions vs. the truth about each cancellation.
+
+Confusion Matrix:
+```{r}
+test.set$pred.ml <- predict(alex,
+                         test.set)
+table(test.set$CANCELLED, test.set$pred.ml)
+```
+
+```{r}
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+test.Kappa.val.ml
+```
+Here test Kappa is again zero for this basic model but we believe it will improve greatly with more predictor variables and use of this algorithm.
+
+A more complex model:
+
+```{r}
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
+                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = small.training.set)
+
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+One large issue that we ran into is demonstrated here, the model repeatedly picks up on distance as an important variable and repeatedly makes thresholds around 860 but the sign associated with each is routinely changing. We can interpret this as distance being a good predictor in each iteration but is not very good as a predictor overall as the signs for identical thresholds are inconsistent. This tells us that we should remove distance from the model because while training the algorithm is spending a lot of iterations focusing on distance with little to nothing show for it and could probably improve by focusing on other variables.
+
+```{r}
+#REMOVED DISTANCE
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
+                TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = small.training.set)
+
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+Here AWND.atl changes sign at almost identical thresholds so it is next removed along with TMIN. Here we also added interaction terms between the amount of precipitation and an indicator for whether or not TMIN or TMAX is less than 32 (=1 if TMAX|TMIN < 32).
+
+
+```{r}
+#REMOVED TMIN and ADDED TMIN.l32 and TMAX.l32
+alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
+                TMAX + WT01 + WT03 + SNOW + PRCP + AWND + WESD + PRCP*PRCP.TMIN.l32 + PRCP*PRCP.TMAX.l32 + 
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = small.training.set)
+
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+For similar reasons we now remove REMOVED PRCP, PRCP.TMIN.l32, TMAX.nyc, TMAX, WT03, MONTH, PRCP.nyc, TMIN_lag1.atl, WT01, WT01.nyc, PRCP.
+
+```{r}
+#REMOVED PRCP
+#PRCP.TMIN.l32
+#TMAX.nyc
+#TMAX
+#WT03
+#MONTH
+#PRCP.nyc
+#TMIN_lag1.atl
+#WT01 & WT01.nyc & PRCP
+alex <- train(factor(CANCELLED) ~ factor(DAY_OF_WEEK) +
+                SNOW + AWND + WESD + PRCP.TMAX.l32 + 
+                TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+                TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+                TMIN.nyc + WT03.nyc + WESD.nyc +
+                TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+                TMAX_lag1.atl + PRCP_lag1.atl +
+                TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+                PRCP_lag1.det,
+              method = "LogitBoost",
+              metric = "Kappa",
+              data = small.training.set)
+alex$results
+alex$finalModel
+
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+At this point this algorithm continues to cycle thorough variables and we will end up removing ones that are rather intuitive for the prediciton of flight cancellations such as snow and precipitation. To make sense of these cycles we would have to look at interactions between multiple variables. For example we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration a random forest makes multiple thresholds that each factor into its predictions and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
+
+```{r}
+
+# alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
+#                 TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
+#                 TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+#                 TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+#                 TMAX.nyc + TMIN.nyc + WT01.nyc + WT03.nyc + PRCP.nyc + WESD.nyc +
+#                 TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+#                 TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+#                 TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+#                 PRCP_lag1.det,
+#               method = "rf",
+#               metric = "Kappa",
+#               data = sample_frac(small.training.set, 1))
+load(rf.model)
+rf.model$results
+rf.model$finalModel
+
+training.set$pred.ml <- predict(rf.model,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(rf.model,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+training.Kappa.val.ml
+test.Kappa.val.ml
+```
+
+These random forests are an improvement over LogitBoost but are much more computationally expensive and do not yield much better results and also has a tendency to overfit as shown in the model above.
+
+#Revisiting Previous Models
+
+One way that we can attempt to get a better idea of whether or not a flight will be cancelled from these models is re-evaluating our cutoff for predicted probabilities. In our original logistic models we used a cutoff of 0.5, meaning that if P(cancellation) > 0.5 we classify the flight as cancelled and if P(cancellation < 0.5) we classify the flight as not cancelled. If our model has spikes in predicted probability for flights that are cancelled we can capture this through a new cutoff. This is computationally inexpensive and intuitive that our model would have a hard time predicting P(cancellation) > 0.5 because so few flights are actually cancelled. We investigate a better cutoff in the code below:
+
+```{r}
+# 
+# fit.glm.once <- function(){
+#   p.cancel <- mean(small.training.set$CANCELLED)
+#   training.model <- glm( factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
+#                            TMAX + TMIN + WT01 + WT03 + SNOW + WESD +
+#                            TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
+#                            TMAX.det + TMIN.det + WT01.det + WT03.det + PRCP.det + WESD.det +
+#                            TMAX.nyc + TMIN.nyc + WT03.nyc + WESD.nyc +
+#                            TMAX_lag1 + TMIN_lag1 + SNOW_lag1 + PRCP_lag1 +
+#                            TMAX_lag1.atl + TMIN_lag1.atl + PRCP_lag1.atl +
+#                            TMAX_lag1.nyc + TMIN_lag1.nyc + PRCP_lag1.nyc +
+#                            PRCP_lag1.det,
+#                          family = "binomial",
+#                          data = training.set)
+#   summary(training.model)
+# 
+#   training.set$pred<- predict.glm(training.model,
+#                               training.set,
+#                               type = "response")
+#   train.quant.97 <- quantile(training.set$pred, 0.97)
+#   train.quant.pcancel <- quantile(training.set$pred, 1-mean(training.set$CANCELLED))
+#   
+#   test.set$pred <- predict.glm(training.model,
+#                               test.set,
+#                               type = "response")
+#   test.quant.97 <- quantile(test.set$pred, 0.97)
+#   test.quant.pcancel <- quantile(test.set$pred, 1-mean(test.set$CANCELLED))
+#   
+#   results <- data.frame()
+#   for(i in seq(from = 0.05, to = 0.95, by = 0.01)){
+#     print(i)
+#     if (sum(training.set$pred > i) == 0 | sum(training.set$pred <= i) == 0 ){
+#       train.results <- data.frame(Cutoff = i,
+#                                   Kappa = 0,
+#                                   Set = "Train",
+#                                   Iteration = iter,
+#                                   Quantile.97 = train.quant.97,
+#                                   PCancel = p.cancel,
+#                                   QuantilePCancel = train.quant.pcancel)
+#     } else{
+#       glm.training.Kappa.val <- (fmsb::Kappa.test(table(training.set$pred > i, training.set$CANCELLED)))$Result$estimate
+#       train.results <- data.frame(Cutoff = i,
+#                                   Kappa = glm.training.Kappa.val,
+#                                   Set = "Train",
+#                                   Iteration = iter,
+#                                   Quantile.97 = train.quant.97,
+#                                   PCancel = p.cancel,
+#                                   QuantilePCancel = train.quant.pcancel)
+#     }
+#     
+#     if(sum(test.set$pred > i) == 0 | sum(test.set$pred <= i) == 0) {
+#       test.results <- data.frame(Cutoff = i,
+#                                  Kappa = 0,
+#                                  Set = "Train",
+#                                  Iteration = iter,
+#                                  Quantile.97 = test.quant.97,
+#                                  PCancel = p.cancel,
+#                                  QuantilePCancel = test.quant.pcancel)
+#     } else{
+#       glm.test.Kappa.val <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred > i)))$Result$estimate
+#       test.results <- data.frame(Cutoff = i,
+#                                  Kappa = glm.test.Kappa.val,
+#                                  Set = "Test",
+#                                  Iteration = iter,
+#                                  Quantile.97 = test.quant.97,
+#                                  PCancel = mean(test.set$CANCELLED),
+#                                  QuantilePCancel = test.quant.pcancel)
+#     }
+#     
+#     results <- rbind(train.results, test.results, results)
+#   }
+#   return(results)
+# }
+# 
+# glm.cutoffs <- fit.glm.once()
+
+glm.cutoffs <- fread("CutoffsLog.csv")
+glm.cutoffs %>%
+  ggplot(aes(x = Cutoff, y = Kappa)) +
+  geom_point() +
+  labs(title = "Kappa vs. Cutoff") +
+  theme_bw() +
+  scale_color_colorblind()
+```
+
+As shown in this graph the cutoff we use can have a large impact on the Kappa we achieve. To the optimal cutoff we began by checking to see if the cutoff is the 0.97 quantile of the predicted probabilities which we intuit from the fact that 97% of flights are cancelled so we hope that these are the 97% of the lowest predicted probabilities of cancellation. To highlight this on the graph we can highlight whether the given cutoff is above or below the 0.97 quantile of the predicted probabilities.
+
+```{r}
+glm.cutoffs %>%
+  mutate(above.quant = Cutoff > Quanitle.97) %>%
+  ggplot(aes(x = Cutoff, y = Kappa)) +
+  geom_point(aes(color = above.quant)) +
+  scale_color_colorblind() +
+  facet_grid(~Set)
+```
+
+Here the Kappa values for both the test and training sets are shown with various cutoffs. We can see that the 0.97 quantile of the predicted proabbilities seems to be the best cutoff in that it achieves the highest Kappa.
+
+```{r}
+
+rf.cutoffs <- fread("CutoffsRF.csv")
+cutoffs.sim <- rf.cutoffs
+
+diffs <- NULL
+for(i in 1:num.iter){
+  print(i)
+  temp.df <-  cutoffs.sim %>%
+    filter(Iteration == i,
+           Set == "Test")
+  max.kappa <- max(temp.df$Kappa)
+  max.cutoff <- temp.df %>%
+    filter(Kappa == max.kappa) %>%
+    .$Cutoff %>%
+    .[1]
+  my.cutoff <- temp.df %>%
+    filter(abs(Cutoff - Quantile.97) < 0.005) %>%
+    .$Cutoff
+  diffs[i] <- max.cutoff - my.cutoff
+}
+hist(diffs)
+t.test(diffs)
+
+diffs.boot <- NULL
+for(i in 1:10000){
+  samp <- sample(diffs, replace = TRUE)
+  diffs.boot[i] <- mean(samp)
+}
+mean(diffs.boot)
+hist(diffs.boot)
+mean(diffs.boot > mean(diffs))
+
+bias <- mean(diffs)
+unbiased.diffs <- NULL
+for(i in 1:num.iter){
+  print(i)
+  temp.df <-  cutoffs.sim %>%
+    filter(Iteration == i,
+           Set == "Test")
+  max.kappa <- max(temp.df$Kappa)
+  max.cutoff <- temp.df %>%
+    filter(Kappa == max.kappa) %>%
+    .$Cutoff %>%
+    .[1]
+  my.cutoff <- temp.df %>%
+    filter(abs(Cutoff - Quantile.97) < 0.005) %>%
+    .$Cutoff
+  unbiased.diffs[i] <- max.cutoff - my.cutoff - bias
+}
+mean(unbiased.diffs)
+hist(unbiased.diffs)
+t.test(unbiased.diffs)
+bias
+
+
+cutoffs.sim %>%
+  filter(Set == "Test") %>%
+  ggplot(aes(x = Cutoff, y = Kappa)) +
+  geom_point()
+
+
+```
+
+
+
+
+```{r}
+flights.bos <- fread("FlightsData0212BOS.csv")
+weather.data <- fread("BOSNYCweather0212.csv")
+
+
+weather <- weather.data %>%
+  mutate(DATE = as_date(DATE)) %>%
+  mutate(SNOW = as.numeric(SNOW),
+         PRCP = as.numeric(PRCP),
+         SNWD = as.numeric(SNWD),
+         TMIN = as.numeric(TMIN),
+         TMAX = as.numeric(TMAX),
+         TAVG = as.numeric(TAVG))
+
+weather.nyc <- weather %>%
+  filter(NAME == "NY CITY CENTRAL PARK, NY US")
+
+weather.bos <- weather %>%
+  filter(NAME == "BOSTON, MA US")
+```
+
+##Feature Selection.
+We speculate that the weather in Boston is different from the weather in NYC and that this difference will help us to predict cancellations of flights in Boston. We must test to see if the weather is different in these two cities.
+```{r}
+hist(weather.bos$TAVG - weather.nyc$TAVG)
+```
+
+This is roughly normally distributed so we can perform a t-test.
+
+```{r}
+t.test(weather.bos$TAVG - weather.nyc$TAVG)
+```
+
+THE AVERAGE TEMPERATURE IS NOT THE SAME.
