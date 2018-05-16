@@ -21,6 +21,7 @@ library(knitr)
 set.seed(1)
 # Update this 
 clean.flights <- fread("~/Desktop/FlightData2.csv")
+# write.csv(sample_frac(clean.flights, 0.2), file = "~/Desktop/FlightData2.csv")
 
 training.set <- clean.flights %>%
   filter(DATE < as_date("2010-01-01")) 
@@ -81,10 +82,12 @@ stargazer(training.model,
 We started by using the amount of precipitation in Boston on the day the flight occured as our predictor variable. Although we see that precipitation has a statistically signifcant relationship with the log odds of a flight being cancelled, when we look at the predictions of flight cancellations its clear that precipitation performs no better than just guessing that no flights will be cancelled because so few flights are cancelled.
 
 ```{r}
-test.set$pred.glm <- stats::predict.glm(training.model,
-                                        test.set,
-                                        type = "response")
-fmsb::Kappa.test(table(test.set$pred.glm > 0.1, test.set$CANCELLED))$Result
+# USING KAPPA BEFORE IT IS INTRODUCED???
+
+# test.set$pred.glm <- stats::predict.glm(training.model,
+#                                         test.set,
+#                                         type = "response")
+# fmsb::Kappa.test(table(test.set$pred.glm > 0.1, test.set$CANCELLED))$Result
 ```
 
 This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. However this model does not add to our understanding of flight cancellations. We can also try this with more variables and regardless of statistical significance the predictions don't change.
@@ -110,9 +113,18 @@ Again we can show that this model predicts no cancelled flights correctly.
 test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
-kable(table(test.set$pred.glm > 0.5, test.set$CANCELLED))
+conf.mat <- table(list(test.set$pred.glm > 0.5, test.set$CANCELLED))
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+
+kable(conf.mat, 
+      caption = "Multivariable Losistic Regression Confusion Matrix", 
+      align  = "l", 
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
 fmsb::Kappa.test(table(test.set$pred.glm > 0.5, test.set$CANCELLED))$Result$estimate
 ```
+
+## Taking a Step Back: Cohen's Kappa
 
 ##THIS IS PREDICTING CORRECTLY UNLIKE THE PRESENTATION NOW
 The accuracy of both of these models is 97% which is would be impressive if we could not also achieve this level of accuracy by guessing that no flights will be cancelled at all. A better metric we can use to evaluate models is Cohen's Kappa which measures the amount of information added by the model by quantifying how much of the gap between random guessing and perfect prediction we have made up with our model. Cohen's Kappa can be calculated using the equation below.
@@ -142,7 +154,13 @@ $$
 
 From this calculation Cohen's Kappa tells us how much better we are doing than randomly permuting our classifications and thus we want this number to be higher and it is bounded above by 1 which would mean we are predicting perfectly. Although it is not bounded below by 0, values below zero mean that we are performing worse than random guessing which is very bad.
 
-With such a strong trend in our data (97% of flights being cancelled) this metric will punish the model strongly for incorrectly predicting against the trend and heavily reward it for correctly predicting against the trend which emphasizes the model's ability to accurately predict against the trend. We can improve this prediction by using the Boosted algorithm LogitBoost (caret package) in which we bootstrap our model through resampled data. In each iteration the data is sampled, with harder to predict observations being weighted heavier, a logistic model is fit to the data and in the end the models are averaged weighted by their performance on the training data. This model also uses decision stumps as opposed to a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
+With such a strong trend in our data (97% of flights being cancelled) this metric will punish the model strongly for incorrectly predicting against the trend and heavily reward it for correctly predicting against the trend which emphasizes the model's ability to accurately predict against the trend. 
+
+## LogitBoost
+
+We can improve this prediction by using the Boosted algorithm LogitBoost (caret package) in which we bootstrap our model through resampled data. In each iteration the data is sampled, with harder to predict observations being weighted heavier, a logistic model is fit to the data and in the end the models are averaged weighted by their performance on the training data. This model also uses decision stumps as opposed to a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
+
+
 
 ```{r}
 print(Sys.time())
@@ -152,19 +170,28 @@ alex <- train(factor(CANCELLED) ~ PRCP,
               data = small.training.set)
 
 print(Sys.time())
-kable(alex$results)
-kable(alex$finalModel$Stump)
+kable(alex$results, caption = "Single Variable LogitBoost Results")
+kable(alex$finalModel$Stump, caption = "Single Variable LogitBoost Decision Stumps")
 ```
 
 Here, with only one feature the model uses this one feature in each iteration with threshold 4.29 with a sign of -1. Therefore if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
 
-Now to calculate Cohen's Kappa we can sue the function Kappa.test our of the `fmsb` package on a confusion matrix of our predictions vs. the truth about each cancellation.
+Now to calculate Cohen's Kappa we can use the `fmsb::Kappa.test()` function on a confusion matrix of our predictions vs. the truth about each cancellation.
 
 Confusion Matrix:
 ```{r}
 test.set$pred.ml <- predict(alex,
                          test.set)
 kable(table(test.set$CANCELLED, test.set$pred.ml))
+
+conf.mat <- table(list(test.set$pred.glm > 0.5, test.set$CANCELLED))
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+
+kable(conf.mat, 
+      caption = "Multivariable Losistic Regression Confusion Matrix", 
+      align  = "l", 
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
 ```
 
 ```{r}
@@ -522,8 +549,8 @@ bias
 
 cutoffs.sim %>%
   filter(Set == "Test") %>%
-  ggplot(aes(x = Cutoff, y = Kappa), alpha = 0.02) +
-  geom_point() +
+  ggplot(aes(x = Cutoff, y = Kappa)) +
+  geom_point(alpha = 0.2) +
   theme_bw()
 
 
