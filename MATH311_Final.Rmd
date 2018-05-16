@@ -7,18 +7,20 @@ output:
   pdf_document: default
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = TRUE)
 library(tidyverse)
 library(lubridate)
 library(data.table)
 library(doMC)
 library(caret)
 library(ggthemes)
+library(stargazer)
+library(knitr)
 
 set.seed(1)
-
-clean.flights <- fread("~/Desktop/FlightData.csv")
+# Update this 
+clean.flights <- fread("~/Desktop/FlightData2.csv")
 
 training.set <- clean.flights %>%
   filter(DATE < as_date("2010-01-01")) 
@@ -42,12 +44,14 @@ secret.test <- clean.flights %>%
 
 ```
 
-##Introduction
+## Introduction
 
 We are attempting to predict flight cancellations for flights leaving Boston using weather data from Boston, Atlanta, Detroit, and New York City. Our flight data contains 1.3 million flights leaving Boston from 2004-2012.
 
 
-##Methods
+## Methods
+
+## Data
 
 While we are using all data from 2004 through 2009 as our training set, this data has over 700,000 entries and thus it is computationally expensive to train on such a large data set. We believe that we should be able to effectively train and get a good understanding of how our model is performing as long as we use at least 10,000 randomly selected entries from this training set. The training set we use to tune our model is actually only 2% of our total training data which equates to roughly 15,000 entries.
 
@@ -62,11 +66,16 @@ training.set <- clean.flights %>%
 
 We began creating our model using basic logistic regression to classify a given flight as either cancelled(1) or not cancelled(0).
 
-```{r}
+```{r, results = "asis"}
 training.model <- glm(factor(CANCELLED) ~ PRCP,
                       family = "binomial",
                       data = training.set)
-summary(training.model)
+# summary(training.model)
+stargazer(training.model,
+          type = "html",
+          dep.var.labels = "Cancelled",
+          title = "Basic Logistic Regression",
+          single.row = TRUE)
 ```
 
 We started by using the amount of precipitation in Boston on the day the flight occured as our predictor variable. Although we see that precipitation has a statistically signifcant relationship with the log odds of a flight being cancelled, when we look at the predictions of flight cancellations its clear that precipitation performs no better than just guessing that no flights will be cancelled because so few flights are cancelled.
@@ -75,12 +84,12 @@ We started by using the amount of precipitation in Boston on the day the flight 
 test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
-fmsb::Kappa.test(table(test.set$pred.glm > 0.1, test.set$CANCELLED))
+fmsb::Kappa.test(table(test.set$pred.glm > 0.1, test.set$CANCELLED))$Result
 ```
 
 This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. However this model does not add to our understanding of flight cancellations. We can also try this with more variables and regardless of statistical significance the predictions don't change.
 
-```{r}
+```{r, results = "asis"}
 training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
                         TMAX + TMIN + PRCP + SNOW + WESD + 
                         TMAX.atl + TMIN.atl + PRCP.atl + WESD.atl +
@@ -88,7 +97,11 @@ training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + 
                         TMAX.det + TMIN.det + PRCP.det + WESD.det, 
                       family = "binomial",
                       data = training.set)
-summary(training.model)
+stargazer(training.model,
+          type = "html",
+          dep.var.labels = "Cancelled",
+          title = "Multivariable Logistic Regression",
+          single.row = TRUE)
 ```
 
 Again we can show that this model predicts no cancelled flights correctly.
@@ -97,7 +110,7 @@ Again we can show that this model predicts no cancelled flights correctly.
 test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
-table(test.set$pred.glm > 0.5, test.set$CANCELLED)
+kable(table(test.set$pred.glm > 0.5, test.set$CANCELLED))
 fmsb::Kappa.test(table(test.set$pred.glm > 0.5, test.set$CANCELLED))$Result$estimate
 ```
 
@@ -121,6 +134,7 @@ P_O &= P(\text{model and truth agree}) \\
 $$
 
 We can understand this as the probability that the model and the true values if their classifications had both been randomly assigned to observations. We would expect them to agree with probability \(P_E\) but these classifications can be distributed in many different permutations and some are better than others. We need to compare our results to this baseline of randomly permuted classifications so we look at the probability that our model and the truth agreed based on the observed matches. We use \(P_O\) which is the probability that the model and the truth agree as observed from our predictions. It is calculated as 
+
 $$
 P_E = P(\text{prediction is correct}) \\
 = \text{mean}(\text{predicted value} == \text{truevalue})\\
@@ -138,8 +152,8 @@ alex <- train(factor(CANCELLED) ~ PRCP,
               data = small.training.set)
 
 print(Sys.time())
-alex$results
-alex$finalModel
+kable(alex$results)
+kable(alex$finalModel$Stump)
 ```
 
 Here, with only one feature the model uses this one feature in each iteration with threshold 4.29 with a sign of -1. Therefore if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
@@ -150,7 +164,7 @@ Confusion Matrix:
 ```{r}
 test.set$pred.ml <- predict(alex,
                          test.set)
-table(test.set$CANCELLED, test.set$pred.ml)
+kable(table(test.set$CANCELLED, test.set$pred.ml))
 ```
 
 ```{r}
@@ -175,8 +189,11 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE
               metric = "Kappa",
               data = small.training.set)
 
-alex$results
-alex$finalModel
+kable(alex$results)
+# alex$finalModel
+# kable(table(alex$finalModel, alex$finalModel$Stump))
+# kable(alex$finalModel$xNames)
+kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:56, Name = alex$finalModel$xNames), by = "feature"))
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -208,8 +225,9 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
               metric = "Kappa",
               data = small.training.set)
 
-alex$results
-alex$finalModel
+kable(alex$results)
+# alex$finalModel
+kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:55, Name = alex$finalModel$xNames), by = "feature"))
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -244,7 +262,8 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
               data = small.training.set)
 
 alex$results
-alex$finalModel
+# alex$finalModel
+kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:57, Name = alex$finalModel$xNames), by = "feature"))
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -285,7 +304,8 @@ alex <- train(factor(CANCELLED) ~ factor(DAY_OF_WEEK) +
               metric = "Kappa",
               data = small.training.set)
 alex$results
-alex$finalModel
+# alex$finalModel
+kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:36, Name = alex$finalModel$xNames), by = "feature"))
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -321,7 +341,8 @@ To account for these interactions between variables we transitioned to using ran
 #               data = sample_frac(small.training.set, 1))
 load("rf.model")
 alex$results
-alex$finalModel
+# alex$finalModel
+# Add this back
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -501,8 +522,9 @@ bias
 
 cutoffs.sim %>%
   filter(Set == "Test") %>%
-  ggplot(aes(x = Cutoff, y = Kappa)) +
-  geom_point()
+  ggplot(aes(x = Cutoff, y = Kappa), alpha = 0.02) +
+  geom_point() +
+  theme_bw()
 
 
 ```
