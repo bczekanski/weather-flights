@@ -182,22 +182,24 @@ Confusion Matrix:
 ```{r}
 test.set$pred.ml <- predict(alex,
                          test.set)
-kable(table(test.set$CANCELLED, test.set$pred.ml))
+# kable(table(test.set$CANCELLED, test.set$pred.ml))
 
-conf.mat <- table(list(test.set$pred.glm > 0.5, test.set$CANCELLED))
-rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
-
+conf.mat <- table(test.set$CANCELLED, test.set$pred.ml)
+# rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
 kable(conf.mat, 
-      caption = "Multivariable Losistic Regression Confusion Matrix", 
-      align  = "l", 
+      caption = "Single Variable LogitBoost Confusion Matrix", 
+      align  = "l"
       # row.names = TRUE,
-      col.names = c("No Cancellation", "Cancellation"))
+      # col.names = c("No Cancellation", "Cancellation")
+      )
 ```
 
 ```{r}
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 test.Kappa.val.ml
 ```
+
 Here test Kappa is again zero for this basic model but we believe it will improve greatly with more predictor variables and use of this algorithm.
 
 A more complex model:
@@ -216,11 +218,11 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE
               metric = "Kappa",
               data = small.training.set)
 
-kable(alex$results)
-# alex$finalModel
-# kable(table(alex$finalModel, alex$finalModel$Stump))
-# kable(alex$finalModel$xNames)
-kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:56, Name = alex$finalModel$xNames), by = "feature"))
+kable(alex$results, caption = "Multivariable LogitBoost Results")
+
+feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:56, Name = alex$finalModel$xNames), by = "feature")
+
+kable(feature.df, caption = "Multivariable LogitBoost Decision Stumps")
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -252,9 +254,11 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
               metric = "Kappa",
               data = small.training.set)
 
-kable(alex$results)
-# alex$finalModel
-kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:55, Name = alex$finalModel$xNames), by = "feature"))
+kable(alex$results, caption = "Multivariable LogitBoost Results")
+
+feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:55, Name = alex$finalModel$xNames), by = "feature")
+
+kable(feature.df, caption = "Multivariable LogitBoost Decision Stumps")
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -288,9 +292,11 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
               metric = "Kappa",
               data = small.training.set)
 
-alex$results
-# alex$finalModel
-kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:57, Name = alex$finalModel$xNames), by = "feature"))
+kable(alex$results, caption = "Multivariable LogitBoost Results")
+
+feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:57, Name = alex$finalModel$xNames), by = "feature")
+
+kable(feature.df, caption = "Multivariable LogitBoost Decision Stumps")
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -330,9 +336,12 @@ alex <- train(factor(CANCELLED) ~ factor(DAY_OF_WEEK) +
               method = "LogitBoost",
               metric = "Kappa",
               data = small.training.set)
-alex$results
-# alex$finalModel
-kable(data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:36, Name = alex$finalModel$xNames), by = "feature"))
+
+kable(alex$results, caption = "Multivariable LogitBoost Results")
+
+feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:36, Name = alex$finalModel$xNames), by = "feature")
+
+kable(feature.df, caption = "Multivariable LogitBoost Decision Stumps")
 
 training.set$pred.ml <- predict(alex,
                                 training.set)
@@ -349,6 +358,8 @@ test.Kappa.val.ml
 ```
 
 At this point this algorithm continues to cycle thorough variables and we will end up removing ones that are rather intuitive for the prediction of flight cancellations such as snow and precipitation. To make sense of these cycles we would have to look at interactions between multiple variables. For example, we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. 
+
+## Introducing Random Forests
 
 To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration a random forest makes multiple thresholds that each factor into its predictions and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
 
@@ -367,7 +378,10 @@ To account for these interactions between variables we transitioned to using ran
 #               metric = "Kappa",
 #               data = sample_frac(small.training.set, 1))
 load("rf.model")
-alex$results
+
+kable(alex$results, caption = "Multivariable Random Forest Results")
+
+
 # alex$finalModel
 # Add this back
 
@@ -498,7 +512,7 @@ num.iter <- cutoffs.sim$Iteration %>%
   length()
 diffs <- NULL
 for(i in 1:num.iter){
-  print(i)
+  # print(i)
   temp.df <-  cutoffs.sim %>%
     filter(Iteration == i,
            Set == "Test")
@@ -527,7 +541,7 @@ mean(diffs.boot > mean(diffs))
 bias <- mean(diffs)
 unbiased.diffs <- NULL
 for(i in 1:num.iter){
-  print(i)
+  # print(i)
   temp.df <-  cutoffs.sim %>%
     filter(Iteration == i,
            Set == "Test")
