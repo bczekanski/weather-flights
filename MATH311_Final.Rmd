@@ -20,13 +20,13 @@ library(knitr)
 
 set.seed(1)
 # Update this 
-clean.flights <- fread("~/Desktop/FlightData2.csv")
+clean.flights <- fread("~/Desktop/FlightData.csv")
 # write.csv(sample_frac(clean.flights, 0.2), file = "~/Desktop/FlightData2.csv")
 
 training.set <- clean.flights %>%
   filter(DATE < as_date("2010-01-01")) 
 
-small.training.set <-  training.set%>%
+small.training.set <- training.set%>%
   sample_frac(0.01)
   #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
 
@@ -47,14 +47,39 @@ secret.test <- clean.flights %>%
 
 ## Introduction
 
-We are attempting to predict flight cancellations for flights leaving Boston using weather data from Boston, Atlanta, Detroit, and New York City. Our flight data contains 1.3 million flights leaving Boston from 2004-2012.
+We are attempting to predict flight cancellations for flights leaving Boston using weather data from Boston, Atlanta, Detroit, and New York City. 
 
 
 ## Methods
 
 ## Data
 
-While we are using all data from 2004 through 2009 as our training set, this data has over 700,000 entries and thus it is computationally expensive to train on such a large data set. We believe that we should be able to effectively train and get a good understanding of how our model is performing as long as we use at least 10,000 randomly selected entries from this training set. The training set we use to tune our model is actually only 2% of our total training data which equates to roughly 15,000 entries.
+## Where does the data come from??
+
+Our flight data contains `r nrow(clean.flights)` flights leaving Boston's Logan Airport from `r min(clean.flights$DATE)` to `r max(clean.flights$DATE)`. There are `r sum(clean.flights$CANCELLED)` total cancellations. The most cancellations on a single day is `r clean.flights %>% group_by(DATE) %>% summarize(cancellations = sum(CANCELLED)) %>% arrange(desc(cancellations)) %>% .[1,2] %>% as.character()` cancellations on `r clean.flights %>% group_by(DATE) %>% summarize(cancellations = sum(CANCELLED)) %>% arrange(desc(cancellations)) %>% .[1,1] %>% as.character()`. For each day in this period we have the weather in Boston, New York City, Detroit, and Atlanta. These weather in these major hubs gives us a sense if there are storms around the country that might affect flights in Boston even if there is nice weather in Massachusetts. Additionally, we incorporate lagged weather variables to account for storms that might move from one of these cities into Boston and affect flights in this way. 
+
+The variables that we have are:
+
+`r paste(names(clean.flights), sep = ", ")`
+
+```{r}
+clean.flights %>%
+  group_by(DATE) %>%
+  summarize(cancellations = sum(CANCELLED)) %>%
+  ggplot2::ggplot(aes(x = as_date(DATE), y = cancellations)) +
+  geom_col() +
+  labs(x = "Date", y = "Cancellations", title = "Logan Airport Flight Cancellations by Day", subtitle = "September 2003 to December 2012") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_x_date(date_breaks = "1 year") +
+  theme_bw()
+# CAPTION
+```
+
+We partition our data into three subsets. The first, the training set, contains data from 2003-2009. The second, what we call the test set and what should technically be called the validation set, contains flights from 2010-2011. We call the third subset the "secret test set" (this should be called the test set). This contains the flights in 2012.
+
+We use the first two subsets to train our model and prevent overfitting. We first train our model on the training set, and then look at how it performs in the test set. If we see that the model performs substantially better on the training set than on the test set, we will know that our model is overfitting and picking up trends in the training set that do not exist in the test set. We break these sets up by date because this allows us to "get into a time machine" to the end of the training set and imagine that we have all the data up to that date and want to predict flights after that date. An important assumption that we make in order to break the data up by date is that there is no structural change in how or why flights are cancelled in Boston that happens near the date of the split. After selecting a model that we think fits the data using the training and test sets, we peek at the "secret test set". Our performance on the "secret test set" gives us an idea of how we really do out of sample, and what our model's performance would be if we wanted to predict cancellations tomorrow.
+
+While we are using all the flights we have from 2003 through 2009 as our training set, this data has over 700,000 entries and thus it is computationally expensive to train on such a large data set. We believe that we should be able to effectively train a model and understand its performing as long as we use at least 10,000 randomly selected entries from this training set. The training set we use to tune our model is actually only 2% of our total training data, which equates to roughly 15,000 entries.
 
 ```{r}
 set.seed(1)
@@ -65,7 +90,7 @@ training.set <- clean.flights %>%
 
 #Basic Logistic Model
 
-We began creating our model using basic logistic regression to classify a given flight as either cancelled(1) or not cancelled(0).
+We began creating our model using basic logistic regression to classify a given flight as either cancelled (1) or not cancelled (0) using the amount of precipitation on that day (in inches).
 
 ```{r, results = "asis"}
 training.model <- glm(factor(CANCELLED) ~ PRCP,
@@ -82,15 +107,33 @@ stargazer(training.model,
 We started by using the amount of precipitation in Boston on the day the flight occured as our predictor variable. Although we see that precipitation has a statistically signifcant relationship with the log odds of a flight being cancelled, when we look at the predictions of flight cancellations its clear that precipitation performs no better than just guessing that no flights will be cancelled because so few flights are cancelled.
 
 ```{r}
-# USING KAPPA BEFORE IT IS INTRODUCED???
+test.set$pred.glm <- stats::predict.glm(training.model,
+                                        test.set,
+                                        type = "response")
 
-# test.set$pred.glm <- stats::predict.glm(training.model,
-#                                         test.set,
-#                                         type = "response")
-# fmsb::Kappa.test(table(test.set$pred.glm > 0.1, test.set$CANCELLED))$Result
+conf.mat <- cbind(table(test.set$CANCELLED, test.set$pred.glm > 0.5), c(0, 0))
+
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+
+kable(conf.mat, 
+      caption = "Basic Logistic Regression Test Set Confusion Matrix", 
+      align  = "l", 
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
+
+kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
+      col.names = "Test Kappa",
+      caption = "Basic Logistic Regression Kappa Value")
 ```
 
-This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. However this model does not add to our understanding of flight cancellations. We can also try this with more variables and regardless of statistical significance the predictions don't change.
+This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. However this model does not add to our understanding of flight cancellations. 
+
+## Multivariable Logistic Regression Model
+
+We then try another logistic regression, this time with more variables.
+
+can also try this with more variables and regardless of statistical significance the predictions don't change.
 
 ```{r, results = "asis"}
 training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
@@ -117,11 +160,14 @@ conf.mat <- table(list(test.set$pred.glm > 0.5, test.set$CANCELLED))
 rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
 
 kable(conf.mat, 
-      caption = "Multivariable Losistic Regression Confusion Matrix", 
+      caption = "Multivariable Logistic Regression Test Set Confusion Matrix", 
       align  = "l", 
       # row.names = TRUE,
       col.names = c("No Cancellation", "Cancellation"))
-fmsb::Kappa.test(table(test.set$pred.glm > 0.5, test.set$CANCELLED))$Result$estimate
+
+kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
+      col.names = "Test Kappa",
+      caption = "Multivariable Logistic Regression Kappa Value")
 ```
 
 ## Taking a Step Back: Cohen's Kappa
@@ -156,20 +202,18 @@ From this calculation Cohen's Kappa tells us how much better we are doing than r
 
 With such a strong trend in our data (97% of flights being cancelled) this metric will punish the model strongly for incorrectly predicting against the trend and heavily reward it for correctly predicting against the trend which emphasizes the model's ability to accurately predict against the trend. 
 
-## LogitBoost
+## Single Variable LogitBoost Model
 
 We can improve this prediction by using the Boosted algorithm LogitBoost (caret package) in which we bootstrap our model through resampled data. In each iteration the data is sampled, with harder to predict observations being weighted heavier, a logistic model is fit to the data and in the end the models are averaged weighted by their performance on the training data. This model also uses decision stumps as opposed to a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
 
-
-
 ```{r}
-print(Sys.time())
+# print(Sys.time())
 alex <- train(factor(CANCELLED) ~ PRCP,
               method = "LogitBoost",
               metric = "Kappa",
               data = small.training.set)
 
-print(Sys.time())
+# print(Sys.time())
 kable(alex$results, caption = "Single Variable LogitBoost Results")
 kable(alex$finalModel$Stump, caption = "Single Variable LogitBoost Decision Stumps")
 ```
@@ -197,10 +241,16 @@ kable(conf.mat,
 
 ```{r}
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
-test.Kappa.val.ml
+# test.Kappa.val.ml
+
+kable(test.Kappa.val.ml,
+      col.names = "Kappa Value",
+      caption = "Single Variable LogitBoost Regression Kappa Value")
 ```
 
 Here test Kappa is again zero for this basic model but we believe it will improve greatly with more predictor variables and use of this algorithm.
+
+## Multivariable LogitBoost Model
 
 A more complex model:
 
@@ -233,8 +283,9 @@ test.set$pred.ml <- predict(alex,
                             test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
-training.Kappa.val.ml
-test.Kappa.val.ml
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "Multivariable LogitBoost Kappa Values")
 ```
 
 One large issue that we ran into is demonstrated here, the model repeatedly picks up on distance as an important variable and repeatedly makes thresholds around 860 but the sign associated with each is routinely changing. We can interpret this as distance being a good predictor in each iteration but is not very good as a predictor overall as the signs for identical thresholds are inconsistent. This tells us that we should remove distance from the model because while training the algorithm is spending a lot of iterations focusing on distance with little to nothing show for it and could probably improve by focusing on other variables.
@@ -270,8 +321,9 @@ test.set$pred.ml <- predict(alex,
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 
-training.Kappa.val.ml
-test.Kappa.val.ml
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "Multivariable LogitBoost Kappa Values")
 ```
 
 Here AWND.atl changes sign at almost identical thresholds so it is next removed along with TMIN. Here we also added interaction terms between the amount of precipitation and an indicator for whether or not TMIN or TMAX is less than 32 (=1 if TMAX|TMIN < 32).
@@ -308,8 +360,9 @@ test.set$pred.ml <- predict(alex,
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 
-training.Kappa.val.ml
-test.Kappa.val.ml
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "Multivariable LogitBoost Kappa Values")
 ```
 
 For similar reasons we now remove REMOVED PRCP, PRCP.TMIN.l32, TMAX.nyc, TMAX, WT03, MONTH, PRCP.nyc, TMIN_lag1.atl, WT01, WT01.nyc, PRCP.
@@ -353,8 +406,9 @@ test.set$pred.ml <- predict(alex,
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 
-training.Kappa.val.ml
-test.Kappa.val.ml
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "Multivariable LogitBoost Kappa Values")
 ```
 
 At this point this algorithm continues to cycle thorough variables and we will end up removing ones that are rather intuitive for the prediction of flight cancellations such as snow and precipitation. To make sense of these cycles we would have to look at interactions between multiple variables. For example, we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. 
@@ -394,8 +448,10 @@ test.set$pred.ml <- predict(alex,
                             test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
-training.Kappa.val.ml
-test.Kappa.val.ml
+
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "Random Forest Kappa Values")
 ```
 
 These random forests are an improvement over LogitBoost but are much more computationally expensive and do not yield much better results and also has a tendency to overfit as shown in the model above.
@@ -483,7 +539,7 @@ One way that we can attempt to get a better idea of whether or not a flight will
 
 glm.cutoffs <- fread("CutoffsLog.csv")
 glm.cutoffs %>%
-  ggplot(aes(x = Cutoff, y = Kappa)) +
+  ggplot(aes(x = Cutoff, y = Kappa, color = Set)) +
   geom_point() +
   labs(title = "Kappa vs. Cutoff") +
   theme_bw() +
@@ -498,7 +554,9 @@ glm.cutoffs %>%
   ggplot(aes(x = Cutoff, y = Kappa)) +
   geom_point(aes(color = above.quant)) +
   scale_color_colorblind() +
-  facet_grid(~Set)
+  facet_grid(~Set) +
+  theme_bw() +
+  labs(title = "Kappa vs Cutoff, with 0.97 quantile")
 ```
 
 Here the Kappa values for both the test and training sets are shown with various cutoffs. We can see that the 0.97 quantile of the predicted proabbilities seems to be the best cutoff in that it achieves the highest Kappa.
@@ -507,6 +565,7 @@ Here the Kappa values for both the test and training sets are shown with various
 
 rf.cutoffs <- fread("CutoffsRF.csv")
 cutoffs.sim <- rf.cutoffs
+
 num.iter <- cutoffs.sim$Iteration %>%
   unique() %>%
   length()
