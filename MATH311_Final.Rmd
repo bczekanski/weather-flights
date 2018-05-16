@@ -15,25 +15,27 @@ library(data.table)
 library(doMC)
 library(caret)
 library(ggthemes)
-clean_flights <- fread("~/Desktop/FlightData.csv")
 
 set.seed(1)
-training.set <- clean_flights %>%
-  filter(DATE < as_date("2009-12-31")) 
+
+clean.flights <- fread("~/Desktop/FlightData.csv")
+
+training.set <- clean.flights %>%
+  filter(DATE < as_date("2010-01-01")) 
 
 small.training.set <-  training.set%>%
   sample_frac(0.01)
   #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
 
 
-test.set <- clean_flights %>%
-  filter(DATE >= as_date("2009-12-31") & DATE < as_date("2012-01-01"),
+test.set <- clean.flights %>%
+  filter(DATE >= as_date("2010-01-01") & DATE < as_date("2012-01-01"),
          DEST %in% unique(training.set$DEST),
          UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
 
 #DO NOT TEST ON
 #TO BE USED TO EVALUATE FINAL MODEL
-secret.test <- clean_flights %>%
+secret.test <- clean.flights %>%
   filter(DATE >= as_date("2012-01-01"),
          DEST %in% unique(training.set$DEST),
          UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
@@ -41,14 +43,17 @@ secret.test <- clean_flights %>%
 ```
 
 ##Introduction
+
 We are attempting to predict flight cancellations for flights leaving Boston using weather data from Boston, Atlanta, Detroit, and New York City. Our flight data contains 1.3 million flights leaving Boston from 2004-2012.
 
 
 ##Methods
-While we are using all data from 2004 through 2009 as our training set, this data has over 700,000 entries and this it is computationally expensive to train on such a large data set. We believe that we should be able to effiectively train and get a good understanding of how our model is performing as long as we use at least 10,000 randomly selected entries from this training set. The training set we use to tune or model is actually only 2% of our total training data which equates to roughly 15,000 entries.
+
+While we are using all data from 2004 through 2009 as our training set, this data has over 700,000 entries and thus it is computationally expensive to train on such a large data set. We believe that we should be able to effectively train and get a good understanding of how our model is performing as long as we use at least 10,000 randomly selected entries from this training set. The training set we use to tune our model is actually only 2% of our total training data which equates to roughly 15,000 entries.
+
 ```{r}
 set.seed(1)
-training.set <- clean_flights %>%
+training.set <- clean.flights %>%
   filter(DATE < as_date("2009-12-31")) %>%
   sample_frac(0.01)
 ```
@@ -64,7 +69,7 @@ training.model <- glm(factor(CANCELLED) ~ PRCP,
 summary(training.model)
 ```
 
-We started by using the amount of precipitation in Boston on the day the flight occured asour predictor variable. Although we see that precipitation has a statistically signifcant relationship with the log odds of a flight being cancelled, when we look at the predictions of flight cancellations its clear that precipitation performs no better than just guessing that no flights will be cancelled because so few flights are cancelled.
+We started by using the amount of precipitation in Boston on the day the flight occured as our predictor variable. Although we see that precipitation has a statistically signifcant relationship with the log odds of a flight being cancelled, when we look at the predictions of flight cancellations its clear that precipitation performs no better than just guessing that no flights will be cancelled because so few flights are cancelled.
 
 ```{r}
 test.set$pred.glm <- stats::predict.glm(training.model,
@@ -101,21 +106,24 @@ The accuracy of both of these models is 97% which is would be impressive if we c
 
 $$
 K = \frac{P_O - P_E}{1 - P_E}\\
-P_O = P(agreement observed)
-P_E = P(agreement expected due to chance)
+P_O = P(\text{Agreement Observed}) \\
+P_E = P(\text{Agreement Expected Due to Chance})
 $$
+
 PE is the probability that the model and the truth agree by random chance. It is calculated as 
 
 $$
-P_O = P(model and truth agree) \\
-= P(both agree flight cancelled) + P(both agree flight not cancelled) \\
-= P(model = 1)P(truth = 1) + P(model = 0)P(truth = 0)
+\begin{align*}
+P_O &= P(\text{model and truth agree}) \\
+&= P(\text{both agree flight cancelled}) + P(\text{both agree flight not cancelled}) \\
+&= P(\text{model} = 1)P(\text{truth} = 1) + P(\text{model} = 0)P(\text{truth} = 0)
+\end{align*}
 $$
 
-We can understand this as the porbability that the model and the true values if their classifications had both been randomly assigned to observations. We would expect them to agree with probability P_E but these classifications can be distributed in many different permutations and some are better than others. We need to compare our results to this baseline of randomly permuted classifications so we look at the probability that our model and the truth agreed based on the observed matches. We use PO which is the probability that the model and the truth agree as observed from our predictions. It is calculated as 
+We can understand this as the probability that the model and the true values if their classifications had both been randomly assigned to observations. We would expect them to agree with probability \(P_E\) but these classifications can be distributed in many different permutations and some are better than others. We need to compare our results to this baseline of randomly permuted classifications so we look at the probability that our model and the truth agreed based on the observed matches. We use \(P_O\) which is the probability that the model and the truth agree as observed from our predictions. It is calculated as 
 $$
-P_E = P(prediction is correct) \\
-= mean(predicted value == truevalue)\\
+P_E = P(\text{prediction is correct}) \\
+= \text{mean}(\text{predicted value} == \text{truevalue})\\
 $$
 
 From this calculation Cohen's Kappa tells us how much better we are doing than randomly permuting our classifications and thus we want this number to be higher and it is bounded above by 1 which would mean we are predicting perfectly. Although it is not bounded below by 0, values below zero mean that we are performing worse than random guessing which is very bad.
@@ -136,7 +144,7 @@ alex$finalModel
 
 Here, with only one feature the model uses this one feature in each iteration with threshold 4.29 with a sign of -1. Therefore if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
 
-Now to calculate Cohen's Kappa we can sue the function Kappa.test our of the "fmsb" package on a confusion matrix of our predictions vs. the truth about each cancellation.
+Now to calculate Cohen's Kappa we can sue the function Kappa.test our of the `fmsb` package on a confusion matrix of our predictions vs. the truth about each cancellation.
 
 Confusion Matrix:
 ```{r}
@@ -293,7 +301,9 @@ training.Kappa.val.ml
 test.Kappa.val.ml
 ```
 
-At this point this algorithm continues to cycle thorough variables and we will end up removing ones that are rather intuitive for the prediciton of flight cancellations such as snow and precipitation. To make sense of these cycles we would have to look at interactions between multiple variables. For example we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration a random forest makes multiple thresholds that each factor into its predictions and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
+At this point this algorithm continues to cycle thorough variables and we will end up removing ones that are rather intuitive for the prediction of flight cancellations such as snow and precipitation. To make sense of these cycles we would have to look at interactions between multiple variables. For example, we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. 
+
+To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration a random forest makes multiple thresholds that each factor into its predictions and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
 
 ```{r}
 
