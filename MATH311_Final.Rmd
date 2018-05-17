@@ -27,6 +27,8 @@ Run models on secret test set
 
 Conf matrices consistently test or train
 
+RF conf mat
+
 ```{r setup, include = FALSE, warning = FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = TRUE)
 library(tidyverse)
@@ -128,7 +130,7 @@ test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
 
-conf.mat <- cbind(table(test.set$CANCELLED, test.set$pred.glm > 0.5), c(0, 0))
+conf.mat <- rbind(table(test.set$pred.glm > 0.5, test.set$CANCELLED), c(0, 0))
 
 rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
 
@@ -139,9 +141,9 @@ kable(conf.mat,
       col.names = c("No Cancellation", "Cancellation"))
 
 
-kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
-      col.names = "Test Kappa",
-      caption = "Basic Logistic Regression Kappa Value")
+# kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
+#       col.names = "Test Kappa",
+#       caption = "Basic Logistic Regression Kappa Value")
 ```
 
 This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. However this model does not add to our understanding of flight cancellations. 
@@ -197,7 +199,16 @@ stargazer(training.model,
           single.row = TRUE)
 ```
 
+
+Now to calculate Cohen's Kappa we can use the `fmsb::Kappa.test()` function on a confusion matrix of our predictions vs. the truth about each cancellation.
+
 ```{r}
+training.set$pred.glm <- stats::predict.glm(training.model,
+                                        training.set,
+                                        type = "response")
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.5, training.set$CANCELLED)))$Result$estimate
+
 test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
@@ -210,9 +221,9 @@ kable(conf.mat,
       # row.names = TRUE,
       col.names = c("No Cancellation", "Cancellation"))
 
-kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
-      col.names = "Test Kappa",
-      caption = "Multivariable Logistic Regression Kappa Value")
+kable(data.frame(training.Kappa.val.ml, fmsb::Kappa.test(conf.mat)$Result$estimate),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "Multivariable Logistic Regression Kappa Values")
 ```
 
 ## Single Variable LogitBoost Model
@@ -239,31 +250,50 @@ kable(alex$finalModel$Stump, caption = "Single Variable LogitBoost Decision Stum
 
 Here, with only one feature, the model uses this feature in each iteration with threshold 4.29 with a sign of -1. This means that if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
 
-Now to calculate Cohen's Kappa we can use the `fmsb::Kappa.test()` function on a confusion matrix of our predictions vs. the truth about each cancellation.
 
 ```{r}
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
 test.set$pred.ml <- predict(alex,
                          test.set)
 # kable(table(test.set$CANCELLED, test.set$pred.ml))
 
-conf.mat <- table(test.set$CANCELLED, test.set$pred.ml)
-# rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
 # FIGURE OUT CONFUSION MATRIX
 kable(conf.mat, 
-      caption = "Single Variable LogitBoost Confusion Matrix", 
-      align  = "l"
+      caption = "Single Variable LogitBoost Test Set Confusion Matrix", 
+      align  = "l",
       # row.names = TRUE,
-      # col.names = c("No Cancellation", "Cancellation")
+      col.names = c("No Cancellation", "Cancellation")
       )
 ```
 
 ```{r}
+training.set$pred.ml <- predict(alex,
+                                training.set)
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 # test.Kappa.val.ml
 
-kable(test.Kappa.val.ml,
-      col.names = "Kappa Value",
-      caption = "Single Variable LogitBoost Regression Kappa Value")
+conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
+kable(conf.mat, 
+      caption = "Single Variable LogitBoost Test Set Confusion Matrix", 
+      align  = "l",
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation")
+      )
+
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "Single Variable LogitBoost Regression Kappa Values")
 ```
 
 Here test Kappa is again zero for this basic model but we believe it will improve greatly with more predictor variables.
@@ -304,6 +334,16 @@ test.set$pred.ml <- predict(alex,
                             test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
+kable(conf.mat, 
+      caption = "Multivariable LogitBoost Test Set Confusion Matrix", 
+      align  = "l",
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
       caption = "Multivariable LogitBoost Kappa Values")
@@ -345,6 +385,15 @@ test.set$pred.ml <- predict(alex,
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 
+conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
+kable(conf.mat, 
+      caption = "Multivariable LogitBoost Test Set Confusion Matrix", 
+      align  = "l",
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
       caption = "Multivariable LogitBoost Kappa Values")
@@ -384,6 +433,16 @@ test.set$pred.ml <- predict(alex,
                             test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
+kable(conf.mat, 
+      caption = "Multivariable LogitBoost Test Set Confusion Matrix", 
+      align  = "l",
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
 
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
@@ -433,6 +492,16 @@ test.set$pred.ml <- predict(alex,
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 
+conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
+kable(conf.mat, 
+      caption = "Multivariable LogitBoost Test Set Confusion Matrix", 
+      align  = "l",
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
+
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
       caption = "Multivariable LogitBoost Kappa Values")
@@ -463,7 +532,7 @@ To account for these interactions between variables we transitioned to using ran
 ```{r}
 load("rf.model")
 
-kable(alex$results, caption = "Multivariable Random Forest Results")
+kable(alex$results, caption = "Random Forest Results")
 
 
 # alex$finalModel
@@ -478,6 +547,15 @@ test.set$pred.ml <- predict(alex,
                             test.set)
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
+kable(conf.mat, 
+      caption = "Random Forest Test Set Confusion Matrix", 
+      align  = "l",
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
 
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
@@ -662,7 +740,7 @@ cutoffs.sim %>%
 
 ## A New Multivariable Logistic Regression Model
 
-We can make an improved Multivariable Logistic Regression model by changing the cutoff to .....??????. This model is shown below.
+We can make an improved Multivariable Logistic Regression model by changing the cutoff to .....?0.1?????. This model is shown below.
 
 ```{r, results = "asis"}
 training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
@@ -680,6 +758,18 @@ stargazer(training.model,
 ```
 
 ```{r}
+training.set$pred.glm <- stats::predict.glm(training.model,
+                                        training.set,
+                                        type = "response")
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.5, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            test.set)
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+
+
 test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
@@ -692,8 +782,8 @@ kable(conf.mat,
       # row.names = TRUE,
       col.names = c("No Cancellation", "Cancellation"))
 
-kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
-      col.names = "Test Kappa",
+kable(data.frame(training.Kappa.val.ml, fmsb::Kappa.test(conf.mat)$Result$estimate),
+      col.names = c("Training Kappa", "Test Kappa"),
       caption = "New Multivariable Logistic Regression Kappa Value")
 ```
 
@@ -703,24 +793,26 @@ kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
 Similarly, we can make a new Random Forest model using the cutoff that we found to be optimal. HOW DO I CHANGE THE CUTOFFS???
 
 ```{r}
-# load("rf.model")
-# 
-# kable(alex$results, caption = "Multivariable Random Forest Results")
-# 
-# # alex$finalModel
-# # Add this back
-# 
-# training.set$pred.ml <- predict(alex,
-#                                 training.set)
-# 
-# training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
-# 
-# test.set$pred.ml <- predict(alex,
-#                             test.set)
-# 
-# test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
-# 
-# kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
-#       col.names = c("Training Kappa", "Test Kappa"),
-#       caption = "Random Forest Kappa Values")
+load("rf.model")
+# CHANGE CUTOFF
+kable(alex$results, caption = "Multivariable Random Forest Results")
+
+# alex$finalModel
+# Add this back
+
+training.set$pred.ml <- predict(alex,
+                                type = "prob",
+                                training.set)[2]
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml > 0.35, training.set$CANCELLED)))$Result$estimate
+
+test.set$pred.ml <- predict(alex,
+                            type = "prob",
+                            test.set)[2]
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml > 0.35)))$Result$estimate
+
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa"),
+      caption = "New Random Forest Kappa Values")
 ```
