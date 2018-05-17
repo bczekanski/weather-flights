@@ -47,10 +47,7 @@ secret.test <- clean.flights %>%
 
 ## Introduction
 
-We are attempting to predict flight cancellations for flights leaving Boston using weather data from Boston, Atlanta, Detroit, and New York City. 
-
-
-## Methods
+At 10:35 am on December 17, 1903, Orville Wright was the first human to experience mechanical flight. As Orville reached this magical high that millions of people have experienced since, Wilbur was the first human to experience the terrible low that is a flight cancellation. The brothers flipped a coin to choose who got to fly first that day, but in our paper we try to do better than chance in predicting flight cancellations. We use daily atmospheric data from Boston, Atlanta, Detroit, and New York City to predict \textit{whether} (weather, geddit?) flights leaving Boston will be cancelled.
 
 ## Data
 
@@ -129,11 +126,41 @@ kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
 
 This model simply guesses that no flights will be cancelled because only 3% of flights in our dataset are cancelled. We can therefore say that this model is 97% accurate because it correctly predicts the results for 97% of the flights. However this model does not add to our understanding of flight cancellations. 
 
+## Taking a Step Back: Cohen's Kappa
+
+Model Accuracy of 97% would be impressive if we could not also achieve this level of accuracy by guessing that no flights will be cancelled at all. A better metric we can use to evaluate models is Cohen's Kappa, which measures the amount of information added by the model. Cohen's Kappa quantifies how much of the gap between random guessing and perfect prediction we have made up with our model and can be calculated using the equation below.
+
+$$
+K = \frac{P_O - P_E}{1 - P_E}\\
+P_O = P(\text{Agreement Observed}) \\
+P_E = P(\text{Agreement Expected Due to Chance})
+$$
+
+\(P_E\) is the probability that the model and the truth agree by random chance. It is calculated as 
+
+$$
+\begin{align*}
+P_O &= P(\text{model and truth agree}) \\
+&= P(\text{both agree flight cancelled}) + P(\text{both agree flight not cancelled}) \\
+&= P(\text{model} = 1)P(\text{truth} = 1) + P(\text{model} = 0)P(\text{truth} = 0)
+\end{align*}
+$$
+
+We can understand this as the probability that the model and the true values if their classifications had both been randomly assigned to observations. We would expect them to agree with probability \(P_E\), but these classifications can be distributed in many different permutations and some are better than others. We need to compare our results to this baseline of randomly permuted classifications so we look at the probability that our model and the truth agreed based on the observed matches. We use \(P_O\) which is the probability that the model and the truth agree as observed from our predictions. It is calculated as 
+
+$$
+P_E = P(\text{prediction is correct}) \\
+= \text{mean}(\text{predicted value} == \text{truevalue})\\
+\text{THIS SHOULD BE A FRACTION, NOT R CODE}
+$$
+
+Cohen's Kappa tells us how much better we are doing than randomly permuting our classifications and thus we want this number to be higher. It is bounded above by 1 which would mean we are predicting perfectly. A Kappa of 0 is equivalent to random permutations. Although Kappa is not bounded below by 0, values below zero mean that we are performing worse than random guessing which is very bad.
+
+With such a strong trend in our data (97% of flights being cancelled) this metric will punish the model strongly for incorrectly predicting against the trend and heavily reward it for correctly predicting against the trend, emphasizing the model's ability to accurately predict against the trend. 
+
 ## Multivariable Logistic Regression Model
 
 We then try another logistic regression, this time with more variables.
-
-can also try this with more variables and regardless of statistical significance the predictions don't change.
 
 ```{r, results = "asis"}
 training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
@@ -142,15 +169,13 @@ training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + 
                         TMAX.nyc + TMIN.nyc + PRCP.nyc + WESD.nyc + 
                         TMAX.det + TMIN.det + PRCP.det + WESD.det, 
                       family = "binomial",
-                      data = training.set)
+                      data = small.training.set)
 stargazer(training.model,
           type = "html",
           dep.var.labels = "Cancelled",
           title = "Multivariable Logistic Regression",
           single.row = TRUE)
 ```
-
-Again we can show that this model predicts no cancelled flights correctly.
 
 ```{r}
 test.set$pred.glm <- stats::predict.glm(training.model,
@@ -170,59 +195,32 @@ kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
       caption = "Multivariable Logistic Regression Kappa Value")
 ```
 
-## Taking a Step Back: Cohen's Kappa
-
-##THIS IS PREDICTING CORRECTLY UNLIKE THE PRESENTATION NOW
-The accuracy of both of these models is 97% which is would be impressive if we could not also achieve this level of accuracy by guessing that no flights will be cancelled at all. A better metric we can use to evaluate models is Cohen's Kappa which measures the amount of information added by the model by quantifying how much of the gap between random guessing and perfect prediction we have made up with our model. Cohen's Kappa can be calculated using the equation below.
-
-$$
-K = \frac{P_O - P_E}{1 - P_E}\\
-P_O = P(\text{Agreement Observed}) \\
-P_E = P(\text{Agreement Expected Due to Chance})
-$$
-
-PE is the probability that the model and the truth agree by random chance. It is calculated as 
-
-$$
-\begin{align*}
-P_O &= P(\text{model and truth agree}) \\
-&= P(\text{both agree flight cancelled}) + P(\text{both agree flight not cancelled}) \\
-&= P(\text{model} = 1)P(\text{truth} = 1) + P(\text{model} = 0)P(\text{truth} = 0)
-\end{align*}
-$$
-
-We can understand this as the probability that the model and the true values if their classifications had both been randomly assigned to observations. We would expect them to agree with probability \(P_E\) but these classifications can be distributed in many different permutations and some are better than others. We need to compare our results to this baseline of randomly permuted classifications so we look at the probability that our model and the truth agreed based on the observed matches. We use \(P_O\) which is the probability that the model and the truth agree as observed from our predictions. It is calculated as 
-
-$$
-P_E = P(\text{prediction is correct}) \\
-= \text{mean}(\text{predicted value} == \text{truevalue})\\
-$$
-
-From this calculation Cohen's Kappa tells us how much better we are doing than randomly permuting our classifications and thus we want this number to be higher and it is bounded above by 1 which would mean we are predicting perfectly. Although it is not bounded below by 0, values below zero mean that we are performing worse than random guessing which is very bad.
-
-With such a strong trend in our data (97% of flights being cancelled) this metric will punish the model strongly for incorrectly predicting against the trend and heavily reward it for correctly predicting against the trend which emphasizes the model's ability to accurately predict against the trend. 
-
 ## Single Variable LogitBoost Model
 
-We can improve this prediction by using the Boosted algorithm LogitBoost (caret package) in which we bootstrap our model through resampled data. In each iteration the data is sampled, with harder to predict observations being weighted heavier, a logistic model is fit to the data and in the end the models are averaged weighted by their performance on the training data. This model also uses decision stumps as opposed to a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
+We can improve this prediction by using the Boosted algorithm LogitBoost from the `caret` package, which allows us to bootstrap our model through resampled data. In each iteration, the data is sampled, with harder to predict observations given larger sample weights. Then a logistic model is fit to the bootstrapped data. Once models have been fit to every bootstrapped sample, they are all averaged, weighted according to their performance on the training data. 
 
-```{r}
+
+### CLARIFY THIS MICHAEL
+Another aspect of LogitBoost is its use of decision stumps. This differs from a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
+
+```{r, echo = TRUE}
 # print(Sys.time())
 alex <- train(factor(CANCELLED) ~ PRCP,
               method = "LogitBoost",
               metric = "Kappa",
               data = small.training.set)
+```
 
+```{r}
 # print(Sys.time())
 kable(alex$results, caption = "Single Variable LogitBoost Results")
 kable(alex$finalModel$Stump, caption = "Single Variable LogitBoost Decision Stumps")
 ```
 
-Here, with only one feature the model uses this one feature in each iteration with threshold 4.29 with a sign of -1. Therefore if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
+Here, with only one feature, the model uses this feature in each iteration with threshold 4.29 with a sign of -1. This means that if precipitation is below 4.29 on the day that the flight occurred each iteration of the model will "vote" that the flight is not cancelled.
 
 Now to calculate Cohen's Kappa we can use the `fmsb::Kappa.test()` function on a confusion matrix of our predictions vs. the truth about each cancellation.
 
-Confusion Matrix:
 ```{r}
 test.set$pred.ml <- predict(alex,
                          test.set)
@@ -248,13 +246,13 @@ kable(test.Kappa.val.ml,
       caption = "Single Variable LogitBoost Regression Kappa Value")
 ```
 
-Here test Kappa is again zero for this basic model but we believe it will improve greatly with more predictor variables and use of this algorithm.
+Here test Kappa is again zero for this basic model but we believe it will improve greatly with more predictor variables.
 
 ## Multivariable LogitBoost Model
 
 A more complex model:
 
-```{r}
+```{r, echo = TRUE}
 alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
                 TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
                 TMAX.atl + TMIN.atl + WT01.atl + WT03.atl + PRCP.atl + AWND.atl + WESD.atl +
@@ -268,6 +266,9 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE
               metric = "Kappa",
               data = small.training.set)
 
+```
+
+```{r}
 kable(alex$results, caption = "Multivariable LogitBoost Results")
 
 feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:56, Name = alex$finalModel$xNames), by = "feature")
@@ -288,9 +289,10 @@ kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       caption = "Multivariable LogitBoost Kappa Values")
 ```
 
-One large issue that we ran into is demonstrated here, the model repeatedly picks up on distance as an important variable and repeatedly makes thresholds around 860 but the sign associated with each is routinely changing. We can interpret this as distance being a good predictor in each iteration but is not very good as a predictor overall as the signs for identical thresholds are inconsistent. This tells us that we should remove distance from the model because while training the algorithm is spending a lot of iterations focusing on distance with little to nothing show for it and could probably improve by focusing on other variables.
+One large issue that we ran into is demonstrated here; the model repeatedly picks up on "DISTANCE" as an important variable. LogitBoost repeatedly makes thresholds around 860 but the sign associated with each is flip-flops. We can interpret this as "DISTANCE" being a good predictor in each iteration but not a very good predictor overall, as the signs for identical thresholds are inconsistent. This suggests that we should perhaps remove "DISTANCE" from the model because the algorithm is spending a lot of iterations focusing on "DISTANCE" with little to nothing show for it and could probably improve by focusing on other variables.
 
-```{r}
+
+```{r, echo = TRUE}
 #REMOVED DISTANCE
 alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
                 TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
@@ -304,7 +306,9 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
               method = "LogitBoost",
               metric = "Kappa",
               data = small.training.set)
+```
 
+```{r}
 kable(alex$results, caption = "Multivariable LogitBoost Results")
 
 feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:55, Name = alex$finalModel$xNames), by = "feature")
@@ -326,10 +330,9 @@ kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       caption = "Multivariable LogitBoost Kappa Values")
 ```
 
-Here AWND.atl changes sign at almost identical thresholds so it is next removed along with TMIN. Here we also added interaction terms between the amount of precipitation and an indicator for whether or not TMIN or TMAX is less than 32 (=1 if TMAX|TMIN < 32).
+Here AWND.atl changes sign at almost identical thresholds so it is next removed along with TMIN. Here we also added interaction terms between the amount of precipitation and an indicator for whether or not TMIN or TMAX is less than 32 (=1 if TMAX|TMIN < 32). 
 
-
-```{r}
+```{r, echo = TRUE}
 #REMOVED TMIN and ADDED TMIN.l32 and TMAX.l32
 alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
                 TMAX + WT01 + WT03 + SNOW + PRCP + AWND + WESD + PRCP*PRCP.TMIN.l32 + PRCP*PRCP.TMAX.l32 + 
@@ -343,7 +346,9 @@ alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) +
               method = "LogitBoost",
               metric = "Kappa",
               data = small.training.set)
+```
 
+```{r}
 kable(alex$results, caption = "Multivariable LogitBoost Results")
 
 feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:57, Name = alex$finalModel$xNames), by = "feature")
@@ -367,7 +372,7 @@ kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
 
 For similar reasons we now remove REMOVED PRCP, PRCP.TMIN.l32, TMAX.nyc, TMAX, WT03, MONTH, PRCP.nyc, TMIN_lag1.atl, WT01, WT01.nyc, PRCP.
 
-```{r}
+```{r, echo = TRUE}
 #REMOVED PRCP
 #PRCP.TMIN.l32
 #TMAX.nyc
@@ -389,7 +394,9 @@ alex <- train(factor(CANCELLED) ~ factor(DAY_OF_WEEK) +
               method = "LogitBoost",
               metric = "Kappa",
               data = small.training.set)
+```
 
+```{r}
 kable(alex$results, caption = "Multivariable LogitBoost Results")
 
 feature.df <- data.frame(alex$finalModel$Stump) %>% left_join(data.frame(feature = 1:36, Name = alex$finalModel$xNames), by = "feature")
@@ -411,11 +418,11 @@ kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       caption = "Multivariable LogitBoost Kappa Values")
 ```
 
-At this point this algorithm continues to cycle thorough variables and we will end up removing ones that are rather intuitive for the prediction of flight cancellations such as snow and precipitation. To make sense of these cycles we would have to look at interactions between multiple variables. For example, we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. 
+At this point this algorithm continues to cycle thorough variables and we will end up removing ones that are rather intuitive for the prediction of flight cancellations such as snow and precipitation. Additionally, this technique does not seem to help, as each time we remove variables our Kappa decreases. To make sense of these cycles we would have to look at interactions between multiple variables. For example, we would need to look at the amount of precipitation when the temperature was below freezing because we expect that this precipitation would better predict a cancellation than rain would. 
 
 ## Introducing Random Forests
 
-To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration a random forest makes multiple thresholds that each factor into its predictions and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
+To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration, a random forest makes multiple thresholds that each factor into its predictions and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
 
 ```{r}
 
@@ -454,7 +461,7 @@ kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       caption = "Random Forest Kappa Values")
 ```
 
-These random forests are an improvement over LogitBoost but are much more computationally expensive and do not yield much better results and also has a tendency to overfit as shown in the model above.
+These random forests are an improvement over LogitBoost but are much more computationally expensive and do not yield much better results. This model also has a tendency to overfit, as shown above.
 
 #Revisiting Previous Models
 
