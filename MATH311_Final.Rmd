@@ -7,6 +7,26 @@ output:
   pdf_document: default
 ---
 
+TO DO:
+
+Where does the data come from? BEN
+
+Kappa values for training and test for all models
+
+Should the training kappas be the small training set?
+
+Explanation of biased estimator MICHAEL
+ 
+Clarify Kappa explanation MICHAEL
+
+Add cutoff selection for LogitBoost 
+
+Change cutoff for RF?? MICHAEL
+
+Run models on secret test set
+
+Conf matrices consistently test or train
+
 ```{r setup, include = FALSE, warning = FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = TRUE)
 library(tidyverse)
@@ -20,7 +40,7 @@ library(knitr)
 
 set.seed(1)
 # Update this 
-clean.flights <- fread("~/Desktop/FlightData.csv")
+clean.flights <- fread("~/Desktop/FlightData2.csv")
 # write.csv(sample_frac(clean.flights, 0.2), file = "~/Desktop/FlightData2.csv")
 
 training.set <- clean.flights %>%
@@ -47,7 +67,7 @@ secret.test <- clean.flights %>%
 
 ## Introduction
 
-At 10:35 am on December 17, 1903, Orville Wright was the first human to experience mechanical flight. As Orville reached this magical high that millions of people have experienced since, Wilbur was the first human to experience the terrible low that is a flight cancellation. The brothers flipped a coin to choose who got to fly first that day, but in our paper we try to do better than chance in predicting flight cancellations. We use daily atmospheric data from Boston, Atlanta, Detroit, and New York City to predict \textit{whether} (weather, geddit?) flights leaving Boston will be cancelled.
+At 10:35 am on December 17, 1903, Orville Wright was the first human to experience mechanical flight. As Orville reached this magical high that millions of people have experienced since, Wilbur was the first human to experience the terrible low that is a flight cancellation. The brothers flipped a coin to choose who got to fly first that day, but in our paper we try to do better than chance in predicting flight cancellations. We use daily atmospheric data from Boston, Atlanta, Detroit, and New York City to predict \(\textit{whether}\) (weather, geddit?) flights leaving Boston will be cancelled.
 
 ## Data
 
@@ -424,7 +444,7 @@ At this point this algorithm continues to cycle thorough variables and we will e
 
 To account for these interactions between variables we transitioned to using random forests. Where LogitBoost makes one threshold per iteration, a random forest makes multiple thresholds that each factor into its predictions and does not re-weight observations for resampling between iterations. These multiple thresholds will account for the interactions between variables although resampling will remove emphasis on correctly predicting observations that are hard to predict.
 
-```{r}
+```{r, echo = TRUE}
 
 # alex <- train(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE +
 #                 TMAX + TMIN + WT01 + WT03 + SNOW + PRCP + AWND + WESD +
@@ -438,6 +458,9 @@ To account for these interactions between variables we transitioned to using ran
 #               method = "rf",
 #               metric = "Kappa",
 #               data = sample_frac(small.training.set, 1))
+```
+
+```{r}
 load("rf.model")
 
 kable(alex$results, caption = "Multivariable Random Forest Results")
@@ -465,9 +488,9 @@ These random forests are an improvement over LogitBoost but are much more comput
 
 #Revisiting Previous Models
 
-One way that we can attempt to get a better idea of whether or not a flight will be cancelled from these models is re-evaluating our cutoff for predicted probabilities. In our original logistic models we used a cutoff of 0.5, meaning that if P(cancellation) > 0.5 we classify the flight as cancelled and if P(cancellation < 0.5) we classify the flight as not cancelled. If our model has spikes in predicted probability for flights that are cancelled we can capture this through a new cutoff. This is computationally inexpensive and intuitive that our model would have a hard time predicting P(cancellation) > 0.5 because so few flights are actually cancelled. We investigate a better cutoff in the code below:
+One way that we can attempt to get a better idea of whether or not a flight will be cancelled from these models is re-evaluating our cutoff for predicted probabilities. In our original logistic models we used a cutoff of 0.5, meaning that if P(cancellation) > 0.5 we classify the flight as cancelled and if P(cancellation < 0.5) we classify the flight as not cancelled. If our model has spikes in predicted probability for flights that are cancelled we can capture this through a new cutoff. This is computationally inexpensive and intuitive that our model would have a hard time predicting P(cancellation) > 0.5 because so few flights are actually cancelled. We try different cutoffs and look at the Kappa values that these new cutoffs give us below.
 
-```{r}
+```{r, fig.cap = "This figure shows the Kappa value at different cutoffs for our Multivariable Logistic Regression model. We see that the cutoffs that give us the highest Kappa values are not at 0.5, but between 0.1 and 0.2."}
 # 
 # fit.glm.once <- function(){
 #   p.cancel <- mean(small.training.set$CANCELLED)
@@ -545,28 +568,30 @@ One way that we can attempt to get a better idea of whether or not a flight will
 # glm.cutoffs <- fit.glm.once()
 
 glm.cutoffs <- fread("CutoffsLog.csv")
+
 glm.cutoffs %>%
   ggplot(aes(x = Cutoff, y = Kappa, color = Set)) +
   geom_point() +
-  labs(title = "Kappa vs. Cutoff") +
+  labs(title = "Multivariable Binomial Regression Kappa vs. Cutoff") +
   theme_bw() +
   scale_color_colorblind()
 ```
 
-As shown in this graph the cutoff we use can have a large impact on the Kappa we achieve. To the optimal cutoff we began by checking to see if the cutoff is the 0.97 quantile of the predicted probabilities which we intuit from the fact that 97% of flights are cancelled so we hope that these are the 97% of the lowest predicted probabilities of cancellation. To highlight this on the graph we can highlight whether the given cutoff is above or below the 0.97 quantile of the predicted probabilities.
+This graph shows how the cutoff we use can have a large impact on the Kappa we achieve. To find the optimal cutoff we began by checking to see if the cutoff is above the 0.97 quantile of the predicted probabilities. If 97% of flights are cancelled we hope that these are the 97% of the lowest predicted probabilities of cancellation. To highlight this on the graph we can look at whether the given cutoff is above or below the 0.97 quantile of the predicted probabilities.
 
-```{r}
+```{r, fig.cap = "Here the Kappa values for both the test and training sets are shown with various cutoffs. We can see that where we go from above the 0.97 quantile  to below the 0.97 quantile of predicted probabilities seems to be the cutoff in that it achieves the highest Kappa."}
+
 glm.cutoffs %>%
   mutate(above.quant = Cutoff > Quantile.97) %>%
   ggplot(aes(x = Cutoff, y = Kappa)) +
   geom_point(aes(color = above.quant)) +
-  scale_color_colorblind() +
-  facet_grid(~Set) +
+  scale_color_colorblind(name = "0.97 Quantile", 
+                         labels = c("Below", "Above")) +
+  facet_grid(~factor(Set, levels = c("Train", "Test"))) +
   theme_bw() +
-  labs(title = "Kappa vs Cutoff, with 0.97 quantile")
+  labs(title = "Binomial Multivariable Regression Kappa vs Cutoff, with 0.97 Quantile",
+       subtitle = "By Set")
 ```
-
-Here the Kappa values for both the test and training sets are shown with various cutoffs. We can see that the 0.97 quantile of the predicted proabbilities seems to be the best cutoff in that it achieves the highest Kappa.
 
 ```{r}
 
@@ -633,8 +658,69 @@ cutoffs.sim %>%
   geom_point(alpha = 0.2) +
   theme_bw()
 
+```
 
+## A New Multivariable Logistic Regression Model
+
+We can make an improved Multivariable Logistic Regression model by changing the cutoff to .....??????. This model is shown below.
+
+```{r, results = "asis"}
+training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
+                        TMAX + TMIN + PRCP + SNOW + WESD + 
+                        TMAX.atl + TMIN.atl + PRCP.atl + WESD.atl +
+                        TMAX.nyc + TMIN.nyc + PRCP.nyc + WESD.nyc + 
+                        TMAX.det + TMIN.det + PRCP.det + WESD.det, 
+                      family = "binomial",
+                      data = small.training.set)
+stargazer(training.model,
+          type = "html",
+          dep.var.labels = "Cancelled",
+          title = "New Multivariable Logistic Regression",
+          single.row = TRUE)
+```
+
+```{r}
+test.set$pred.glm <- stats::predict.glm(training.model,
+                                        test.set,
+                                        type = "response")
+conf.mat <- table(list(test.set$pred.glm > 0.1, test.set$CANCELLED))
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+
+kable(conf.mat, 
+      caption = "New Multivariable Logistic Regression Test Set Confusion Matrix", 
+      align  = "l", 
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
+kable(fmsb::Kappa.test(conf.mat)$Result$estimate,
+      col.names = "Test Kappa",
+      caption = "New Multivariable Logistic Regression Kappa Value")
 ```
 
 
+## A New Random Forest Model
 
+Similarly, we can make a new Random Forest model using the cutoff that we found to be optimal. HOW DO I CHANGE THE CUTOFFS???
+
+```{r}
+# load("rf.model")
+# 
+# kable(alex$results, caption = "Multivariable Random Forest Results")
+# 
+# # alex$finalModel
+# # Add this back
+# 
+# training.set$pred.ml <- predict(alex,
+#                                 training.set)
+# 
+# training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml, training.set$CANCELLED)))$Result$estimate
+# 
+# test.set$pred.ml <- predict(alex,
+#                             test.set)
+# 
+# test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
+# 
+# kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
+#       col.names = c("Training Kappa", "Test Kappa"),
+#       caption = "Random Forest Kappa Values")
+```
