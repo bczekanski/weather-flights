@@ -671,6 +671,12 @@ glm.cutoffs %>%
        subtitle = "By Set")
 ```
 
+##An Estimator
+To estimate the optimal cutoff for our random forest we would ideally run a random forest on the entire training set and then look at each cutoff and find the optimal choice. However, this is computationally expensive so instead we trained a random forest on 288 random selections on one thousandth of our dataset (roughly 1000 observations) selected randomly. This is a small sample size and is likely not as representative of the true values as we would like, but we were limited to this size by run time. At each iteration we trained the model and then determined the optimal cutoff. 
+
+We estimated the optimal cutoff as the top 3% of predicted probabilities. To determine whether or not this estimator is biased we looked at the the difference between the estimated cutoff and the true optimal cutoff for each iteration.
+
+
 ```{r}
 
 rf.cutoffs <- fread("CutoffsRF.csv")
@@ -696,8 +702,11 @@ for(i in 1:num.iter){
   diffs[i] <- max.cutoff - my.cutoff
 }
 hist(diffs)
-t.test(diffs)
+```
 
+Above is a histogram of the differences between the estimated and optimal cutoffs. We do not believe that this data is normally distributed, therefore to test whether or not the true difference could be 0 we must bootstrap.
+
+``` {r}
 diffs.boot <- NULL
 for(i in 1:10000){
   samp <- sample(diffs, replace = TRUE)
@@ -705,9 +714,15 @@ for(i in 1:10000){
 }
 mean(diffs.boot)
 hist(diffs.boot)
-mean(diffs.boot > mean(diffs))
+mean(diffs.boot < 0)
+```
 
-bias <- mean(diffs)
+Here 0% of our boostrapped values for the difference between the estimated and optimal cutoffs are below 0 so therefore there is aproximately a 0% chance that the true difference between the estimator and the true value is 0 assuming that these data are representative which we believe they are because N is large. Therefore we conclude that this estimator is biased. 
+
+To calculate its bias we can calculate the expected (mean) distance between the estimator and the true optimal cutoff.
+
+```{r}
+rf.bias <- mean(diffs)
 unbiased.diffs <- NULL
 for(i in 1:num.iter){
   # print(i)
@@ -722,13 +737,17 @@ for(i in 1:num.iter){
   my.cutoff <- temp.df %>%
     filter(abs(Cutoff - Quantile.97) < 0.005) %>%
     .$Cutoff
-  unbiased.diffs[i] <- max.cutoff - my.cutoff - bias
+  unbiased.diffs[i] <- max.cutoff - my.cutoff - rf.bias
 }
 mean(unbiased.diffs)
 hist(unbiased.diffs)
-t.test(unbiased.diffs)
-bias
+mean()
+rf.bias
+```
 
+We can therefore conclude that an unbiased estimator for the true optimal cutoff of a random forest trained on our training set to predict on our test set is the 97% quantile of the predicted probabilities - `r rf.bias`.
+
+```{r}
 
 cutoffs.sim %>%
   filter(Set == "Test") %>%
@@ -793,6 +812,7 @@ kable(data.frame(training.Kappa.val.ml, fmsb::Kappa.test(conf.mat)$Result$estima
 Similarly, we can make a new Random Forest model using the cutoff that we found to be optimal. HOW DO I CHANGE THE CUTOFFS???
 
 ```{r}
+cutoff <- 0.5 #CHANGE CUTOFF
 load("rf.model")
 # CHANGE CUTOFF
 kable(alex$results, caption = "Multivariable Random Forest Results")
@@ -804,13 +824,13 @@ training.set$pred.ml <- predict(alex,
                                 type = "prob",
                                 training.set)[2]
 
-training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml > 0.35, training.set$CANCELLED)))$Result$estimate
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml > cutoff, training.set$CANCELLED)))$Result$estimate
 
 test.set$pred.ml <- predict(alex,
                             type = "prob",
                             test.set)[2]
 
-test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml > 0.35)))$Result$estimate
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml > cutoff)))$Result$estimate
 
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
