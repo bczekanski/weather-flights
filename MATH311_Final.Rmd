@@ -13,11 +13,11 @@ Where does the data come from? BEN
 
 Kappa values for training and test for all models
 
-Should the training kappas be the small training set?
+Should the training kappas be the small training set? YES or do both small training and full training with test
 
-Explanation of biased estimator MICHAEL
+Explanation of biased estimator MICHAEL done.
  
-Clarify Kappa explanation MICHAEL
+Clarify Kappa explanation MICHAEL. done.
 
 Add cutoff selection for LogitBoost 
 
@@ -153,7 +153,7 @@ This model simply guesses that no flights will be cancelled because only 3% of f
 Model Accuracy of 97% would be impressive if we could not also achieve this level of accuracy by guessing that no flights will be cancelled at all. A better metric we can use to evaluate models is Cohen's Kappa, which measures the amount of information added by the model. Cohen's Kappa quantifies how much of the gap between random guessing and perfect prediction we have made up with our model and can be calculated using the equation below.
 
 $$
-K = \frac{P_O - P_E}{1 - P_E}\\
+Kappa = \frac{P_O - P_E}{1 - P_E}\\
 P_O = P(\text{Agreement Observed}) \\
 P_E = P(\text{Agreement Expected Due to Chance})
 $$
@@ -172,8 +172,8 @@ We can understand this as the probability that the model and the true values if 
 
 $$
 P_E = P(\text{prediction is correct}) \\
-= \text{mean}(\text{predicted value} == \text{truevalue})\\
-\text{THIS SHOULD BE A FRACTION, NOT R CODE}
+&= \frac{1}{n}\sum_{j=1}I_j
+\text{where I_j is an indicator for predcited value matches true value for observation j}
 $$
 
 Cohen's Kappa tells us how much better we are doing than randomly permuting our classifications and thus we want this number to be higher. It is bounded above by 1 which would mean we are predicting perfectly. A Kappa of 0 is equivalent to random permutations. Although Kappa is not bounded below by 0, values below zero mean that we are performing worse than random guessing which is very bad.
@@ -689,15 +689,16 @@ diffs <- NULL
 for(i in 1:num.iter){
   # print(i)
   temp.df <-  cutoffs.sim %>%
-    filter(Iteration == i,
-           Set == "Test")
+    filter(Iteration == i)
   max.kappa <- max(temp.df$Kappa)
   max.cutoff <- temp.df %>%
-    filter(Kappa == max.kappa) %>%
+    filter(Kappa == max.kappa,
+           Set == "Test") %>%
     .$Cutoff %>%
     .[1]
   my.cutoff <- temp.df %>%
-    filter(abs(Cutoff - Quantile.97) < 0.005) %>%
+    filter(abs(Cutoff - Quantile.97) < 0.005,
+           Set == "Train") %>%
     .$Cutoff
   diffs[i] <- max.cutoff - my.cutoff
 }
@@ -709,7 +710,7 @@ Above is a histogram of the differences between the estimated and optimal cutoff
 ``` {r}
 diffs.boot <- NULL
 for(i in 1:10000){
-  samp <- sample(diffs, replace = TRUE)
+  samp <- sample(na.omit(diffs), replace = TRUE)
   diffs.boot[i] <- mean(samp)
 }
 mean(diffs.boot)
@@ -722,7 +723,7 @@ Here 0% of our boostrapped values for the difference between the estimated and o
 To calculate its bias we can calculate the expected (mean) distance between the estimator and the true optimal cutoff.
 
 ```{r}
-rf.bias <- mean(diffs)
+rf.bias <- mean(diffs, na.rm = TRUE)
 unbiased.diffs <- NULL
 for(i in 1:num.iter){
   # print(i)
@@ -741,7 +742,6 @@ for(i in 1:num.iter){
 }
 mean(unbiased.diffs)
 hist(unbiased.diffs)
-mean()
 rf.bias
 ```
 
@@ -809,10 +809,10 @@ kable(data.frame(training.Kappa.val.ml, fmsb::Kappa.test(conf.mat)$Result$estima
 
 ## A New Random Forest Model
 
-Similarly, we can make a new Random Forest model using the cutoff that we found to be optimal. HOW DO I CHANGE THE CUTOFFS???
+Similarly, we can make a new Random Forest model using this unbiased estimator. Here we use our model to predict on the training set and then calculate the 97% quantile of the predicted probabilities and unbias it by subtracting the bias we calculated earlier (`r rf.bias`)
 
 ```{r}
-cutoff <- 0.5 #CHANGE CUTOFF
+
 load("rf.model")
 # CHANGE CUTOFF
 kable(alex$results, caption = "Multivariable Random Forest Results")
@@ -822,7 +822,10 @@ kable(alex$results, caption = "Multivariable Random Forest Results")
 
 training.set$pred.ml <- predict(alex,
                                 type = "prob",
-                                training.set)[2]
+                                training.set)[[2]]
+
+biased.estim <- quantile(training.set$pred.ml, 0.97)
+cutoff <- biased.estim - rf.bias
 
 training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.ml > cutoff, training.set$CANCELLED)))$Result$estimate
 
