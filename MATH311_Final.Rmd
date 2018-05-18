@@ -232,7 +232,7 @@ We can improve this prediction by using the Boosted algorithm LogitBoost from th
 
 
 ### CLARIFY THIS MICHAEL
-Another aspect of LogitBoost is its use of decision stumps. This differs from a linear model, where a standard logistic model creates a linear relationship between log odds and inputs LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for predicion of our binary predicted variable. A simple use of this algorithm is shown below.
+Another aspect of LogitBoost is its use of decision stumps. This differs from a linear model, where a standard logistic model creates a linear relationship between log odds and inputs, LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for prediction of our binary predicted variable. For example LogitBoost could create a threshold for distance on iteration 1 with a threshold of 500 where any flight with a distance of over 500 and any flight with a distance less than 500 is predicted as not cancelled. A logistic model assumes the same difference in log odds for going from 0 mile to 100 miles as going from 900 to 1000 miles which could have larger implications regarding fuel and plane size. These stumps allow us to capture large trends in the data with a single cutoff. A simple use of this algorithm is shown below.
 
 ```{r, echo = TRUE}
 # print(Sys.time())
@@ -449,7 +449,7 @@ kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       caption = "Multivariable LogitBoost Kappa Values")
 ```
 
-For similar reasons we now remove REMOVED PRCP, PRCP.TMIN.l32, TMAX.nyc, TMAX, WT03, MONTH, PRCP.nyc, TMIN_lag1.atl, WT01, WT01.nyc, PRCP.
+For similar reasons we now remove PRCP, PRCP.TMIN.l32, TMAX.nyc, TMAX, WT03, MONTH, PRCP.nyc, TMIN_lag1.atl, WT01, WT01.nyc, PRCP.
 
 ```{r, echo = TRUE}
 #REMOVED PRCP
