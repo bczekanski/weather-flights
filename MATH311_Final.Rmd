@@ -218,7 +218,6 @@ kable(data.frame(training.Kappa.val.ml, fmsb::Kappa.test(conf.mat)$Result$estima
 We can improve this prediction by using the Boosted algorithm LogitBoost from the `caret` package, which allows us to bootstrap our model through resampled data. In each iteration, the data is sampled, with harder to predict observations given larger sample weights. Then a logistic model is fit to the bootstrapped data. Once models have been fit to every bootstrapped sample, they are all averaged, weighted according to their performance on the training data. 
 
 
-### CLARIFY THIS MICHAEL
 Another aspect of LogitBoost is its use of decision stumps. This differs from a linear model, where a standard logistic model creates a linear relationship between log odds and inputs, LogitBoost creates a threshold for each predictor variable and uses this as a binary cutoff for prediction of our binary predicted variable. For example LogitBoost could create a threshold for distance on iteration 1 with a threshold of 500 where any flight with a distance of over 500 and any flight with a distance less than 500 is predicted as not cancelled. A logistic model assumes the same difference in log odds for going from 0 mile to 100 miles as going from 900 to 1000 miles which could have larger implications regarding fuel and plane size. These stumps allow us to capture large trends in the data with a single cutoff. A simple use of this algorithm is shown below.
 
 ```{r, echo = TRUE}
@@ -694,6 +693,9 @@ hist(diffs)
 
 Above is a histogram of the differences between the estimated and optimal cutoffs. We do not believe that this data is normally distributed, therefore to test whether or not the true difference could be 0 we must bootstrap.
 
+Null Hypothesis: The true mean of the difference between the optimal cutoff and our estimated cutoff is 0.
+Alternative Hypothesis: The true mean of the difference between the optimal cutoff and our estimated cutoff is not 0.
+
 ``` {r}
 diffs.boot <- NULL
 for(i in 1:10000){
@@ -705,7 +707,7 @@ hist(diffs.boot)
 mean(diffs.boot < 0)
 ```
 
-Here 0% of our boostrapped values for the difference between the estimated and optimal cutoffs are below 0 so therefore there is aproximately a 0% chance that the true difference between the estimator and the true value is 0 assuming that these data are representative which we believe they are because N is large. Therefore we conclude that this estimator is biased. 
+Here 0% of our boostrapped values for the difference between the estimated and optimal cutoffs are below 0 so therefore there is aproximately a 0% chance that the true difference between the estimator and the true value is 0 assuming that these data are representative which we believe they are because N is large. Therefore we conclude that this estimator is biased by rejecting the null hypothesis. 
 
 To calculate its bias we can calculate the expected (mean) distance between the estimator and the true optimal cutoff.
 
@@ -889,4 +891,4 @@ This extremely low secret test Kappa value is surprising and suggests that we ei
 
 # Conclusion
 
-In conclusion predicting flight cancellations is difficult. It is hard to predict these classifications because such an overwhelming majority of flights are not cancelled. This creates a strong trend in the data that is very hard to predict against and thus it is hard to correctly classify cancelled flights. Although we make use of Cohen's Kappa, our model still struggles to predict against this trend even when using more advanced algorithms. It is also interesting that logistic regression outperforms both of our machine learning algorithms when given similar amounts of data even when we introduce random forests which should capture more of the relationships between variables. We can further conclude that there must be some sort of structural change to how flights are cancelled because our model performs well on the test set but not well at all on the secret test set even though it hasn't seen either of these subsets of our data. Our model performs well on the test set (data from 2010-2011) but performs much worse on the secret test set (data from 2012) which none of our models were able to use. This shows that even though the model did not see either of these datasets when training, there must be some difference in the mechanism that determines whether a flight is cancelled from 2010/2011 to 2012. 
+In conclusion predicting flight cancellations is difficult. It is hard to predict these classifications because such an overwhelming majority of flights are not cancelled. This creates a strong trend in the data that is very hard to predict against and thus it is hard to correctly classify cancelled flights. Although we make use of Cohen's Kappa, our model still struggles to predict against this trend even when using more advanced algorithms. It is also interesting that logistic regression outperforms both of our machine learning algorithms when given similar amounts of data even when we introduce random forests which should capture more of the relationships between variables. We can further conclude that there must be some sort of structural change to how flights are cancelled because our model performs well on the test set but not well at all on the secret test set even though it hasn't seen either of these subsets of our data. Our model performs well on the test set (data from 2010-2011) but performs much worse on the secret test set (data from 2012) which none of our models were able to use. This shows that even though the model did not see either of these datasets when training, there must be some difference in the mechanism that determines whether a flight is cancelled from 2010/2011 to 2012 as our model does not seem to be overfit when looking at just the training and test sets. It could be interesting to look into what this structural change may have been as well as look in to cancellations at other airports and flight delay length.
