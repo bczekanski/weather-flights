@@ -890,5 +890,8 @@ kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml, secret.test.Kappa.val
       caption = "New Multivariable Logistic Regression Kappa Values")
 ```
 
+This extremely low secret test Kappa value is surprising and suggests that we either started to overfit when we used the cutoff, or there is some structural change that happened in 2012 that caused flights from Logan to be delayed differently.
+
+
 # Conclusion
 
