@@ -7,11 +7,6 @@ output:
   pdf_document: default
 ---
 
-TO DO:
-
-Where does the weather data come from, add link
-
-Conclusion
 
 ```{r setup, include = FALSE, warning = FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
