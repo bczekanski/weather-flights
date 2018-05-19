@@ -9,28 +9,12 @@ output:
 
 TO DO:
 
-Where does the data come from? BEN
+Where does the weather data come from, add link
 
-Kappa values for training and test for all models
-
-Should the training kappas be the small training set? YES or do both small training and full training with test
-
-Explanation of biased estimator MICHAEL done.
- 
-Clarify Kappa explanation MICHAEL. done.
-
-Add cutoff selection for LogitBoost 
-
-Change cutoff for RF?? MICHAEL
-
-Run models on secret test set
-
-Conf matrices consistently test or train
-
-RF conf mat
+Conclusion
 
 ```{r setup, include = FALSE, warning = FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = TRUE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
 library(tidyverse)
 library(lubridate)
 library(data.table)
@@ -42,16 +26,11 @@ library(knitr)
 
 set.seed(1)
 # Update this 
-clean.flights <- fread("~/Desktop/FlightData2.csv")
+clean.flights <- fread("~/Desktop/FlightData.csv")
 # write.csv(sample_frac(clean.flights, 0.2), file = "~/Desktop/FlightData2.csv")
 
 training.set <- clean.flights %>%
   filter(DATE < as_date("2010-01-01")) 
-
-small.training.set <- training.set%>%
-  sample_frac(0.01)
-  #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
-
 
 test.set <- clean.flights %>%
   filter(DATE >= as_date("2010-01-01") & DATE < as_date("2012-01-01"),
@@ -65,21 +44,33 @@ secret.test <- clean.flights %>%
          DEST %in% unique(training.set$DEST),
          UNIQUE_CARRIER %in% unique(training.set$UNIQUE_CARRIER))
 
+small.training.set <- training.set%>%
+  sample_frac(0.01)
+
+training.set <- small.training.set
+  #select(-c(STATION, NAME, DATE, YEAR, DAY_OF_MONTH, FL_DATE, TAIL_NUM, FL_NUM, ORIGIN_AIRPORT_ID, ORIGIN_STATE_ABR, DEST_AIRPORT_ID, DEST_STATE_ABR, DEP_TIME, 217:231, 233:238, 240:246))
+
 ```
 
-## Introduction
+#  Introduction
 
 At 10:35 am on December 17, 1903, Orville Wright was the first human to experience mechanical flight. As Orville reached this magical high that millions of people have experienced since, Wilbur was the first human to experience the terrible low that is a flight cancellation. The brothers flipped a coin to choose who got to fly first that day, but in our paper we try to do better than chance in predicting flight cancellations. We use daily atmospheric data from Boston, Atlanta, Detroit, and New York City to predict \(\textit{whether}\) (weather, geddit?) flights leaving Boston will be cancelled.
 
-## Data
+# Methods
 
-## Where does the data come from??
+## Data
 
 Our flight data contains `r nrow(clean.flights)` flights leaving Boston's Logan Airport from `r min(clean.flights$DATE)` to `r max(clean.flights$DATE)`. There are `r sum(clean.flights$CANCELLED)` total cancellations. The most cancellations on a single day is `r clean.flights %>% group_by(DATE) %>% summarize(cancellations = sum(CANCELLED)) %>% arrange(desc(cancellations)) %>% .[1,2] %>% as.character()` cancellations on `r clean.flights %>% group_by(DATE) %>% summarize(cancellations = sum(CANCELLED)) %>% arrange(desc(cancellations)) %>% .[1,1] %>% as.character()`. For each day in this period we have the weather in Boston, New York City, Detroit, and Atlanta. These weather in these major hubs gives us a sense if there are storms around the country that might affect flights in Boston even if there is nice weather in Massachusetts. Additionally, we incorporate lagged weather variables to account for storms that might move from one of these cities into Boston and affect flights in this way. 
 
 The variables that we have are:
 
 `r paste(names(clean.flights), sep = ", ")`
+
+The airline data can be found here: https://docs.microsoft.com/en-us/machine-learning-server/r/tutorial-revoscaler-large-data-airline
+
+The weather data can be found here:
+
+
 
 ```{r}
 clean.flights %>%
@@ -171,9 +162,11 @@ $$
 We can understand this as the probability that the model and the true values if their classifications had both been randomly assigned to observations. We would expect them to agree with probability \(P_E\), but these classifications can be distributed in many different permutations and some are better than others. We need to compare our results to this baseline of randomly permuted classifications so we look at the probability that our model and the truth agreed based on the observed matches. We use \(P_O\) which is the probability that the model and the truth agree as observed from our predictions. It is calculated as 
 
 $$
-P_E = P(\text{prediction is correct}) \\
-&= \frac{1}{n}\sum_{j=1}I_j
-\text{where I_j is an indicator for predcited value matches true value for observation j}
+\begin{align*}
+P_E &= P(\text{prediction is correct}) \\
+&= \frac{1}{n}\sum_{j=1}I_j \\
+&\text{where I_j is an indicator for predcited value matches true value for observation j}
+\end{align*}
 $$
 
 Cohen's Kappa tells us how much better we are doing than randomly permuting our classifications and thus we want this number to be higher. It is bounded above by 1 which would mean we are predicting perfectly. A Kappa of 0 is equivalent to random permutations. Although Kappa is not bounded below by 0, values below zero mean that we are performing worse than random guessing which is very bad.
@@ -284,12 +277,12 @@ test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.m
 conf.mat <- table(test.set$pred.ml, test.set$CANCELLED)
 rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
 # FIGURE OUT CONFUSION MATRIX
-kable(conf.mat, 
-      caption = "Single Variable LogitBoost Test Set Confusion Matrix", 
-      align  = "l",
-      # row.names = TRUE,
-      col.names = c("No Cancellation", "Cancellation")
-      )
+# kable(conf.mat, 
+#       caption = "Single Variable LogitBoost Test Set Confusion Matrix", 
+#       align  = "l",
+#       # row.names = TRUE,
+#       col.names = c("No Cancellation", "Cancellation")
+#       )
 
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
@@ -759,7 +752,7 @@ cutoffs.sim %>%
 
 ## A New Multivariable Logistic Regression Model
 
-We can make an improved Multivariable Logistic Regression model by changing the cutoff to .....?0.1?????. This model is shown below.
+We can make an improved Multivariable Logistic Regression model by changing the cutoff to 0.11. This model is shown below.
 
 ```{r, results = "asis"}
 training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
@@ -781,18 +774,17 @@ training.set$pred.glm <- stats::predict.glm(training.model,
                                         training.set,
                                         type = "response")
 
-training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.5, training.set$CANCELLED)))$Result$estimate
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.11, training.set$CANCELLED)))$Result$estimate
 
-test.set$pred.ml <- predict(alex,
-                            test.set)
-
-test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml)))$Result$estimate
 
 
 test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
-conf.mat <- table(list(test.set$pred.glm > 0.1, test.set$CANCELLED))
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > 0.11)))$Result$estimate
+
+conf.mat <- table(list(test.set$pred.glm > 0.11, test.set$CANCELLED))
 rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
 
 kable(conf.mat, 
@@ -835,7 +827,68 @@ test.set$pred.ml <- predict(alex,
 
 test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.ml > cutoff)))$Result$estimate
 
+conf.mat <- table(test.set$pred.ml > cutoff, test.set$CANCELLED)
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+# FIGURE OUT CONFUSION MATRIX
+kable(conf.mat, 
+      caption = "Random Forest Test Set Confusion Matrix", 
+      align  = "l",
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
 kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml),
       col.names = c("Training Kappa", "Test Kappa"),
       caption = "New Random Forest Kappa Values")
 ```
+
+# Results: Our Best Model
+
+The model that performed best on the test set was the New Multivariable Logistic Regression model with the changed cutoff. We will now run this model on the secret test set to see what true out of sample performance is like.
+
+```{r}
+training.model <- glm(factor(CANCELLED) ~ factor(MONTH) + factor(DAY_OF_WEEK) + DISTANCE + 
+                        TMAX + TMIN + PRCP + SNOW + WESD + 
+                        TMAX.atl + TMIN.atl + PRCP.atl + WESD.atl +
+                        TMAX.nyc + TMIN.nyc + PRCP.nyc + WESD.nyc + 
+                        TMAX.det + TMIN.det + PRCP.det + WESD.det, 
+                      family = "binomial",
+                      data = small.training.set)
+```
+
+```{r}
+training.set$pred.glm <- stats::predict.glm(training.model,
+                                        training.set,
+                                        type = "response")
+
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.11, training.set$CANCELLED)))$Result$estimate
+
+
+
+test.set$pred.glm <- stats::predict.glm(training.model,
+                                        test.set,
+                                        type = "response")
+
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > 0.11)))$Result$estimate
+
+secret.test$pred.glm <- stats::predict.glm(training.model,
+                                        secret.test,
+                                        type = "response")
+
+secret.test.Kappa.val.ml <- (fmsb::Kappa.test(table(secret.test$CANCELLED, secret.test$pred.glm > 0.11)))$Result$estimate
+
+conf.mat <- table(list(secret.test$pred.glm > 0.11, secret.test$CANCELLED))
+rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
+
+kable(conf.mat, 
+      caption = "New Multivariable Logistic Regression Secret Test Set Confusion Matrix", 
+      align  = "l", 
+      # row.names = TRUE,
+      col.names = c("No Cancellation", "Cancellation"))
+
+kable(data.frame(training.Kappa.val.ml, test.Kappa.val.ml, secret.test.Kappa.val.ml),
+      col.names = c("Training Kappa", "Test Kappa", "Secret Test Kappa"),
+      caption = "New Multivariable Logistic Regression Kappa Values")
+```
+
+# Conclusion
+
