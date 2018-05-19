@@ -69,15 +69,14 @@ The variables that we have are:
 The airline data can be found here: https://docs.microsoft.com/en-us/machine-learning-server/r/tutorial-revoscaler-large-data-airline
 
 The weather data can be found here:
-
-
+https://www.ncdc.noaa.gov/cdo-web/search?datasetid=GHCND
 
 ```{r}
 clean.flights %>%
   group_by(DATE) %>%
   summarize(cancellations = sum(CANCELLED)) %>%
   ggplot2::ggplot(aes(x = as_date(DATE), y = cancellations)) +
-  geom_col() +
+  geom_col(position = ) +
   labs(x = "Date", y = "Cancellations", title = "Logan Airport Flight Cancellations by Day", subtitle = "September 2003 to December 2012") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   scale_x_date(date_breaks = "1 year") +
@@ -165,7 +164,7 @@ $$
 \begin{align*}
 P_E &= P(\text{prediction is correct}) \\
 &= \frac{1}{n}\sum_{j=1}I_j \\
-&\text{where I_j is an indicator for predcited value matches true value for observation j}
+&\text{where \(I_j\) is an indicator for predcited value matches true value for observation j}
 \end{align*}
 $$
 
@@ -774,7 +773,7 @@ training.set$pred.glm <- stats::predict.glm(training.model,
                                         training.set,
                                         type = "response")
 
-training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.11, training.set$CANCELLED)))$Result$estimate
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.09, training.set$CANCELLED)))$Result$estimate
 
 
 
@@ -782,9 +781,9 @@ test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
 
-test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > 0.11)))$Result$estimate
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > 0.09)))$Result$estimate
 
-conf.mat <- table(list(test.set$pred.glm > 0.11, test.set$CANCELLED))
+conf.mat <- table(list(test.set$pred.glm > 0.09, test.set$CANCELLED))
 rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
 
 kable(conf.mat, 
@@ -860,7 +859,7 @@ training.set$pred.glm <- stats::predict.glm(training.model,
                                         training.set,
                                         type = "response")
 
-training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.11, training.set$CANCELLED)))$Result$estimate
+training.Kappa.val.ml <- (fmsb::Kappa.test(table(training.set$pred.glm > 0.09, training.set$CANCELLED)))$Result$estimate
 
 
 
@@ -868,15 +867,15 @@ test.set$pred.glm <- stats::predict.glm(training.model,
                                         test.set,
                                         type = "response")
 
-test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > 0.11)))$Result$estimate
+test.Kappa.val.ml <- (fmsb::Kappa.test(table(test.set$CANCELLED, test.set$pred.glm > 0.09)))$Result$estimate
 
 secret.test$pred.glm <- stats::predict.glm(training.model,
                                         secret.test,
                                         type = "response")
 
-secret.test.Kappa.val.ml <- (fmsb::Kappa.test(table(secret.test$CANCELLED, secret.test$pred.glm > 0.11)))$Result$estimate
+secret.test.Kappa.val.ml <- (fmsb::Kappa.test(table(secret.test$CANCELLED, secret.test$pred.glm > 0.09)))$Result$estimate
 
-conf.mat <- table(list(secret.test$pred.glm > 0.11, secret.test$CANCELLED))
+conf.mat <- table(list(secret.test$pred.glm > 0.09, secret.test$CANCELLED))
 rownames(conf.mat) <- c("Predicted No Cancellation", "Predicted Cancellation")
 
 kable(conf.mat, 
